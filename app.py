@@ -27,7 +27,17 @@ except Exception as e:
     st.stop()
 
 # 計分邏輯
-def get_points(res):
+# 運算排名 (加入強制類型轉換)
+if not df_bets.empty and "結果分類" in df_matches.columns and "場次" in df_bets.columns:
+    # --- 關鍵修正：將兩邊的「場次」強制轉為字串，並去除前後空白 ---
+    df_bets['場次'] = df_bets['場次'].astype(str).str.strip()
+    df_matches['場次'] = df_matches['場次'].astype(str).str.strip()
+    
+    merged = df_bets.merge(df_matches[['場次', '結果分類']], on='場次', how='left')
+    merged['得分'] = merged['結果分類'].apply(get_points)
+    scores = merged.groupby('人名')['得分'].sum().to_dict()
+else:
+    scores = {}def get_points(res):
     mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
     return mapping.get(str(res).strip(), 0)
 
