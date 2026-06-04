@@ -98,3 +98,21 @@ with tab1:
 with tab2:
     st.subheader("⚽ 比賽詳情")
     st.dataframe(df_matches_display, use_container_width=True)
+    # 1. 調整 Tabs 定義
+tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 全體兄弟落注"])
+
+# ... (tab1, tab2 嘅內容保持不變) ...
+
+# 2. 修改 tab3 的內容
+with tab3:
+    st.subheader("📋 手足落注紀錄")
+    
+    # 這裡直接使用你在 app.py 開頭讀取的 df_bets
+    if not df_bets.empty:
+        # 只顯示你需要的欄位，隱藏太複雜的格式
+        display_df = df_bets[['人名', '場次', '投注']].copy()
+        
+        # 為了美觀，可以將「投注」欄位變成比較顯眼的樣子
+        st.table(display_df)
+    else:
+        st.write("目前仲未有人落注，快啲叫兄弟搶頭啖湯！")
