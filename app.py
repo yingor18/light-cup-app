@@ -20,7 +20,7 @@ def load_data(sheet):
 # 1. 載入資料
 try:
     df_matches = load_data("Matches")
-    df_bets = load_data("Bets")  # 確保 Tab 名為 Bets
+    df_bets = load_data("FinalBets")  # 確保 Tab 名為 Bets
     df_players = load_data("Players")
     all_players = df_players["人名"].dropna().astype(str).tolist()
 except Exception as e:
