@@ -60,8 +60,10 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
     m = st.selectbox("選場次", df_matches["場次"].unique().tolist())
     b = st.radio("盤口", ["上盤", "下盤"])
     if st.form_submit_button("🔥 提交"):
-        requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
-        st.success("提交成功！請稍候刷新")
+        # 確保呢度嘅 params 參數名同 Apps Script 嘅 e.parameter.xxx 完全對應
+        params = {'name': u, 'match': m, 'bet': b}
+        requests.get(GAS_URL, params=params)
+        st.success("提交成功！")
 
 tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 投注紀錄"])
 
