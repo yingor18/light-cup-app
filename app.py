@@ -64,7 +64,20 @@ df_matches_display.index = df_matches_display.index + 1
 # --- 介面 ---
 with st.sidebar.form("bet_form", clear_on_submit=True):
     st.header("🎲 手足落注")
-    u = st.selectbox("選擇名字", all_players)
+   u = st.selectbox(
+    "選擇名字", 
+    options=all_players, 
+    index=None, 
+    placeholder="請選擇你的名字..."
+)
+if st.form_submit_button("🔥 提交"):
+        # 防呆：檢查有沒有選名字
+        if u is None:
+            st.warning("⚠️ 請先選擇你的名字！")
+        else:
+            # 原有的提交邏輯...
+            params = {'name': u, 'match': m, 'bet': b}
+            # ...後面保持不變
     m = st.selectbox("選場次", df_matches["場次"].unique().tolist())
     b = st.radio("盤口", ["上盤", "下盤"])
     if st.form_submit_button("🔥 提交"):
