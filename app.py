@@ -63,7 +63,7 @@ df_matches_display.index = df_matches_display.index + 1
 
 # --- 介面 ---
 with st.sidebar.form("bet_form", clear_on_submit=True):
-    st.header("🎲 兄弟落注")
+    st.header("🎲 手足落注")
     u = st.selectbox("選擇名字", all_players)
     m = st.selectbox("選場次", df_matches["場次"].unique().tolist())
     b = st.radio("盤口", ["上盤", "下盤"])
