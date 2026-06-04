@@ -131,7 +131,7 @@ with tab1:
             lowest_player = df_rank.iloc[-1]['人名']
             lowest_score = df_rank.iloc[-1]['燈閪總積分']
             if lowest_score < 0: 
-                st.error(f"🚨 目前由 **{lowest_player}** 以 {lowest_score} 分領先成為【終極冥燈閪】！")
+                st.error(f"🚨 目前由 **{lowest_player}** 以 {lowest_score} 分領先成為【終極燈閪】！")
 
 with tab2:
     st.header("📋 兄弟們落注詳細紀錄")
