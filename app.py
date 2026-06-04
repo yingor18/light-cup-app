@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from streamlit_autorefresh import st_autorefresh
-import requests
 
 st.set_page_config(page_title="世界盃亞盤燈閪盃 🏆", layout="wide")
 # 每 60 秒自動刷新網頁，同步最新數據
@@ -38,8 +37,13 @@ if df_bets.empty or "人名" not in df_bets.columns:
 if df_players.empty or "人名" not in df_players.columns:
     df_players = pd.DataFrame(columns=["人名"])
 
-players_list = df_players["人名"].dropna().str.strip().tolist() if "人名" in df_players.columns else []
-matches_list = df_matches["場次"].dropna().str.strip().tolist() if "場次" in df_matches.columns else []
+# 【核心防禦修正】：先用 astype(str) 確保安全，防止因為空白表格變成 float 導致 str 報錯
+players_list = df_players["人名"].dropna().astype(str).str.strip().tolist() if "人名" in df_players.columns else []
+matches_list = df_matches["場次"].dropna().astype(str).str.strip().tolist() if "場次" in df_matches.columns else []
+
+# 移除因為強制轉型可能產生的 'nan' 字眼
+players_list = [p for p in players_list if p.lower() != 'nan' and p != '']
+matches_list = [m for m in matches_list if m.lower() != 'nan' and m != '']
 
 # ================= 2. 側邊欄控制台 (莊家開波 + 兄弟落注) =================
 st.sidebar.header("⚙️ 雲端後台控制面板")
@@ -52,7 +56,7 @@ st.sidebar.write("---")
 # 兄弟快捷落注
 st.sidebar.subheader("🎲 兄弟快捷落注區")
 if not matches_list:
-    st.sidebar.info("請莊家先到 Google Sheet 新增場次。")
+    st.sidebar.info("💡 提示：請莊家先到 Google Sheet 新增場次波膽，呢度就會出字畀兄弟揀！")
 else:
     with st.sidebar.form(key="bet_form", clear_on_submit=True):
         bet_user = st.selectbox("你是哪位兄弟？", options=["選擇你的名字"] + players_list)
@@ -97,7 +101,7 @@ def calculate_handicap_score(home_score, away_score, handicap, is_home_favorite,
         if top_status == "輸全": return 10
     return 0
 
-# ================= 4. 右側主要畫面顯示 (已改名) =================
+# ================= 4. 右側主要畫面顯示 =================
 tab1, tab2, tab3 = st.tabs(["📊 燈閪榜", "🎲 投注一覽", "⚽ 即時馬會讓球盤"])
 
 with tab1:
@@ -108,7 +112,7 @@ with tab1:
         scores_dict = {p: 0 for p in players_list}
         if not df_matches.empty and "賽果分數" in df_matches.columns:
             for _, m_row in df_matches.iterrows():
-                m_title = m_row["場次"]
+                m_title = str(m_row["場次"]).strip()
                 score_str = m_row["賽果分數"]
                 if pd.notna(score_str) and score_str != "未完場" and ":" in str(score_str):
                     try:
@@ -117,7 +121,7 @@ with tab1:
                         h_cap = m_row["盤口"]
                         for p in players_list:
                             if not df_bets.empty and "場次" in df_bets.columns and "人名" in df_bets.columns:
-                                p_bet = df_bets[(df_bets["人名"].str.strip() == p) & (df_bets["場次"].str.strip() == m_title)]
+                                p_bet = df_bets[(df_bets["人名"].astype(str).str.strip() == p) & (df_bets["場次"].astype(str).str.strip() == m_title)]
                                 bet_choice = p_bet["投注"].values[0] if not p_bet.empty else "未選擇"
                                 pts = calculate_handicap_score(h_score, a_score, h_cap, is_home_fav, bet_choice)
                                 scores_dict[p] += pts
@@ -134,7 +138,7 @@ with tab1:
                 st.error(f"🚨 目前由 **{lowest_player}** 以 {lowest_score} 分領先成為【終極燈閪】！")
 
 with tab2:
-    st.header("📋 兄弟們落注詳細紀錄")
+    st.header("📋 落注詳細紀錄")
     if df_bets.empty:
         st.info("目前未有任何落注紀錄，可在後台 Bets 分頁添加。")
     else:
