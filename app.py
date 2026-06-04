@@ -18,7 +18,7 @@ def load_data(sheet):
 
 # 載入全部資料
 df_matches = load_data("Matches")
-df_bets = load_data("表單回覆 1")
+df_bets = load_data("Bets")
 df_players = load_data("Players")
 all_players = df_players["人名"].dropna().astype(str).tolist()
 
