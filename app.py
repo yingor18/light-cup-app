@@ -22,12 +22,12 @@ df_bets = load_data("表單回覆 1")
 df_players = load_data("Players")
 all_players = df_players["人名"].dropna().astype(str).tolist()
 
-# 計分邏輯
+# 計分邏輯 (處理同分同排名)
 def get_points(res):
     mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
     return mapping.get(str(res).strip(), 0)
 
-# 計算並建立完整排名
+# 計算並建立排名
 if not df_bets.empty and "結果分類" in df_matches.columns:
     merged = df_bets.merge(df_matches[['場次', '結果分類']], on='場次', how='left')
     merged['得分'] = merged['結果分類'].apply(get_points)
@@ -35,15 +35,15 @@ if not df_bets.empty and "結果分類" in df_matches.columns:
 else:
     scores = {}
 
-# 修改排名計算邏輯
+# 建立 DataFrame 並設置 1-7 排名
 leaderboard_data = [{"人名": p, "得分": scores.get(p, 0)} for p in all_players]
-leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False)
-
-# 使用 min 排名法：同分會 share 同一個排名，且會跳過中間數字 (e.g., 1, 1, 3)
+leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False).reset_index(drop=True)
 leaderboard['排名'] = leaderboard['得分'].rank(method='min', ascending=False).astype(int)
-
-# 重新排序欄位
 leaderboard = leaderboard[['排名', '人名', '得分']]
+
+# 處理賽事表格：令 index 從 1 開始
+df_matches_display = df_matches.copy()
+df_matches_display.index = df_matches_display.index + 1
 
 # --- 介面呈現 ---
 with st.sidebar.form("bet_form", clear_on_submit=True):
@@ -55,17 +55,17 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
         requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
         st.success("提交成功！")
 
-tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 原始落注紀錄"])
+# 修改 Tab 名稱
+tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 投注紀錄"])
 
 with tab1:
-    st.subheader("🏆 燈閪盃兄弟排名 (1-7名)")
-    # 使用 dataframe 顯示，保證欄位完整
+    st.subheader("🏆 燈閪盃兄弟排名")
     st.dataframe(leaderboard, use_container_width=True, hide_index=True)
 
 with tab2:
     st.subheader("⚽ 比賽詳情")
-    st.dataframe(df_matches, use_container_width=True)
+    st.dataframe(df_matches_display, use_container_width=True) # 顯示從1開始的 index
 
 with tab3:
-    st.subheader("📋 每一筆落注紀錄")
+    st.subheader("📋 投注紀錄")
     st.dataframe(df_bets, use_container_width=True)
