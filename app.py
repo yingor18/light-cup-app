@@ -16,33 +16,31 @@ def load_data(sheet):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded_sheet}"
     return pd.read_csv(url)
 
-# 1. 載入全部資料
+# 載入全部資料
 df_matches = load_data("Matches")
 df_bets = load_data("表單回覆 1")
 df_players = load_data("Players")
 all_players = df_players["人名"].dropna().astype(str).tolist()
 
-# 2. 強制計算包含所有人的排名
+# 計分邏輯
 def get_points(res):
     mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
     return mapping.get(str(res).strip(), 0)
 
-# 合併資料，並確保所有在 Player 名單的人都出現
+# 計算並建立完整排名 DataFrame (包含所有人)
 if not df_bets.empty and "結果分類" in df_matches.columns:
     merged = df_bets.merge(df_matches[['場次', '結果分類']], on='場次', how='left')
     merged['得分'] = merged['結果分類'].apply(get_points)
-    # 按人名分組求和
     scores = merged.groupby('人名')['得分'].sum().to_dict()
 else:
     scores = {}
 
-# 建立完整排名 DataFrame (包含 0 分者)
 leaderboard_data = [{"人名": p, "得分": scores.get(p, 0)} for p in all_players]
 leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False)
+# --- 關鍵修復：加入 1-7 排名 ---
 leaderboard.insert(0, '排名', range(1, len(leaderboard) + 1))
 
 # --- 介面呈現 ---
-# 側邊欄落注
 with st.sidebar.form("bet_form", clear_on_submit=True):
     st.header("🎲 兄弟落注")
     u = st.selectbox("選擇名字", all_players)
@@ -52,11 +50,11 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
         requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
         st.success("提交成功！")
 
-# 分頁顯示
 tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 原始落注紀錄"])
 
 with tab1:
-    st.subheader("🏆 燈閪盃兄弟排名 (含所有參與者)")
+    st.subheader("🏆 燈閪盃兄弟排名")
+    # 將排名設為 Index 令顯示更專業
     st.table(leaderboard.set_index('排名'))
 
 with tab2:
