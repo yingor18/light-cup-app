@@ -27,7 +27,7 @@ def get_points(res):
     mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
     return mapping.get(str(res).strip(), 0)
 
-# 計算並建立完整排名 DataFrame (包含所有人)
+# 計算並建立完整排名
 if not df_bets.empty and "結果分類" in df_matches.columns:
     merged = df_bets.merge(df_matches[['場次', '結果分類']], on='場次', how='left')
     merged['得分'] = merged['結果分類'].apply(get_points)
@@ -35,9 +35,9 @@ if not df_bets.empty and "結果分類" in df_matches.columns:
 else:
     scores = {}
 
+# 建立 DataFrame 並排序
 leaderboard_data = [{"人名": p, "得分": scores.get(p, 0)} for p in all_players]
-leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False)
-# --- 關鍵修復：加入 1-7 排名 ---
+leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False).reset_index(drop=True)
 leaderboard.insert(0, '排名', range(1, len(leaderboard) + 1))
 
 # --- 介面呈現 ---
@@ -53,9 +53,9 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
 tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 原始落注紀錄"])
 
 with tab1:
-    st.subheader("🏆 燈閪盃兄弟排名")
-    # 將排名設為 Index 令顯示更專業
-    st.table(leaderboard.set_index('排名'))
+    st.subheader("🏆 燈閪盃兄弟排名 (1-7名)")
+    # 使用 dataframe 顯示，保證欄位完整
+    st.dataframe(leaderboard, use_container_width=True, hide_index=True)
 
 with tab2:
     st.subheader("⚽ 比賽詳情")
