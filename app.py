@@ -7,8 +7,8 @@ import urllib.parse
 SHEET_ID = "1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0"
 GAS_URL = "https://script.google.com/macros/s/AKfycbziToDdXkbc-tG9G_snGu8CnEFAMHjAjVGT-uBecEB6CmPMt4xed_6U8VYAef45cW02gA/exec"
 
-st.set_page_config(layout="wide", page_title="燈閪盃排名")
-st.title("🏆 世界盃 - 燈閪盃積分榜")
+st.set_page_config(layout="wide", page_title="燈閪盃系統")
+st.title("🏆 世界盃 - 燈閪盃總覽")
 
 @st.cache_data(ttl=0)
 def load_data(sheet):
@@ -16,46 +16,53 @@ def load_data(sheet):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded_sheet}"
     return pd.read_csv(url)
 
-# 載入資料
+# 1. 載入全部資料
 df_matches = load_data("Matches")
 df_bets = load_data("表單回覆 1")
 df_players = load_data("Players")
-players = df_players["人名"].dropna().tolist()
+all_players = df_players["人名"].dropna().astype(str).tolist()
 
-# 計分邏輯
+# 2. 強制計算包含所有人的排名
 def get_points(res):
     mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
     return mapping.get(str(res).strip(), 0)
 
-# 計算排名
-leaderboard = pd.DataFrame(columns=["排名", "人名", "得分"])
+# 合併資料，並確保所有在 Player 名單的人都出現
 if not df_bets.empty and "結果分類" in df_matches.columns:
     merged = df_bets.merge(df_matches[['場次', '結果分類']], on='場次', how='left')
     merged['得分'] = merged['結果分類'].apply(get_points)
-    leaderboard = merged.groupby('人名')['得分'].sum().reset_index().sort_values(by='得分', ascending=False)
-    leaderboard.insert(0, '排名', range(1, len(leaderboard) + 1))
+    # 按人名分組求和
+    scores = merged.groupby('人名')['得分'].sum().to_dict()
+else:
+    scores = {}
 
-# --- 介面佈局 ---
-# 側邊欄：落注
+# 建立完整排名 DataFrame (包含 0 分者)
+leaderboard_data = [{"人名": p, "得分": scores.get(p, 0)} for p in all_players]
+leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False)
+leaderboard.insert(0, '排名', range(1, len(leaderboard) + 1))
+
+# --- 介面呈現 ---
+# 側邊欄落注
 with st.sidebar.form("bet_form", clear_on_submit=True):
     st.header("🎲 兄弟落注")
-    u = st.selectbox("兄弟", ["選擇"] + players)
-    m = st.selectbox("場次", df_matches["場次"].unique().tolist())
+    u = st.selectbox("選擇名字", all_players)
+    m = st.selectbox("選場次", df_matches["場次"].unique().tolist())
     b = st.radio("盤口", ["上盤", "下盤"])
     if st.form_submit_button("🔥 提交"):
         requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
         st.success("提交成功！")
 
-# 主頁面：Tab 切換
-tab1, tab2 = st.tabs(["📊 積分榜 (1-7名)", "📋 落注紀錄"])
+# 分頁顯示
+tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 原始落注紀錄"])
 
 with tab1:
-    st.subheader("🏆 燈閪盃實時排名")
-    if not leaderboard.empty:
-        st.table(leaderboard.set_index('排名'))
-    else:
-        st.info("暫無比賽數據，請稍候。")
+    st.subheader("🏆 燈閪盃兄弟排名 (含所有參與者)")
+    st.table(leaderboard.set_index('排名'))
 
 with tab2:
-    st.subheader("📋 所有落注紀錄")
+    st.subheader("⚽ 比賽詳情")
+    st.dataframe(df_matches, use_container_width=True)
+
+with tab3:
+    st.subheader("📋 每一筆落注紀錄")
     st.dataframe(df_bets, use_container_width=True)
