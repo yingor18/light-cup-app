@@ -12,19 +12,27 @@ st.title("🏆 世界盃 - 燈閪盃全自動系統")
 
 # 數據讀取
 @st.cache_data(ttl=0)
+import urllib.parse
+
+@st.cache_data(ttl=0)
 def load_data(sheet):
-    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet}"
+    # 將中文工作表名稱進行 URL 編碼，解決 InvalidURL 錯誤
+    encoded_sheet = urllib.parse.quote(sheet)
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded_sheet}"
     return pd.read_csv(url)
 
 df_matches = load_data("Matches")
 df_bets = load_data("表單回覆 1")
-players = load_data("Players")["人名"].dropna().tolist()
+df_players = load_data("Players")
+players = df_players["人名"].dropna().tolist()
 
-# 封盤過濾
+# 封盤過濾 (檢查時間)
 active_matches = []
 for _, row in df_matches.iterrows():
-    if datetime.now() < datetime.strptime(str(row["開賽時間"]), "%Y-%m-%d %H:%M"):
-        active_matches.append(str(row["場次"]))
+    try:
+        if datetime.now() < datetime.strptime(str(row["開賽時間"]), "%Y-%m-%d %H:%M"):
+            active_matches.append(str(row["場次"]))
+    except: continue
 
 # 側邊欄落注
 with st.sidebar.form("bet", clear_on_submit=True):
@@ -32,10 +40,15 @@ with st.sidebar.form("bet", clear_on_submit=True):
     m = st.selectbox("場次", active_matches)
     b = st.radio("盤口", ["上盤", "下盤"])
     if st.form_submit_button("🔥 提交"):
-        requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
-        st.success("成功！")
+        if u == "選擇": st.error("請選名！")
+        elif not m: st.error("無賽事可選！")
+        else:
+            try:
+                requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b}, timeout=10)
+                st.success("成功！")
+            except Exception as e:
+                st.error(f"連線失敗: {e}")
 
-# 計分邏輯 (顯示在積分榜)
-st.subheader("📊 積分榜")
-# 這裡會根據你寫入的資料自動計算，暫時先顯示落注紀錄
-st.dataframe(df_bets)
+# 顯示區
+st.subheader("📊 積分榜與紀錄")
+st.dataframe(df_bets, use_container_width=True)
