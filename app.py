@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 import requests
 import urllib.parse
 
@@ -29,33 +28,34 @@ def get_points(res):
     return mapping.get(str(res).strip(), 0)
 
 # 計算排名
+leaderboard = pd.DataFrame(columns=["排名", "人名", "得分"])
 if not df_bets.empty and "結果分類" in df_matches.columns:
     merged = df_bets.merge(df_matches[['場次', '結果分類']], on='場次', how='left')
     merged['得分'] = merged['結果分類'].apply(get_points)
     leaderboard = merged.groupby('人名')['得分'].sum().reset_index().sort_values(by='得分', ascending=False)
-    # 加入排名欄位
     leaderboard.insert(0, '排名', range(1, len(leaderboard) + 1))
-else:
-    leaderboard = pd.DataFrame(columns=["排名", "人名", "得分"])
 
-# 顯示介面
-tab1, tab2 = st.tabs(["📊 實時排名 (1-7名)", "📋 落注紀錄"])
-
-with tab1:
-    st.subheader("🏆 燈閪盃英雄榜")
-    if not leaderboard.empty:
-        st.table(leaderboard.set_index('排名'))
-    else:
-        st.write("暫無比賽數據。")
-
-with tab2:
-    st.dataframe(df_bets, use_container_width=True)
-
-# 側邊欄落注
+# --- 介面佈局 ---
+# 側邊欄：落注
 with st.sidebar.form("bet_form", clear_on_submit=True):
+    st.header("🎲 兄弟落注")
     u = st.selectbox("兄弟", ["選擇"] + players)
     m = st.selectbox("場次", df_matches["場次"].unique().tolist())
     b = st.radio("盤口", ["上盤", "下盤"])
     if st.form_submit_button("🔥 提交"):
         requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
         st.success("提交成功！")
+
+# 主頁面：Tab 切換
+tab1, tab2 = st.tabs(["📊 積分榜 (1-7名)", "📋 落注紀錄"])
+
+with tab1:
+    st.subheader("🏆 燈閪盃實時排名")
+    if not leaderboard.empty:
+        st.table(leaderboard.set_index('排名'))
+    else:
+        st.info("暫無比賽數據，請稍候。")
+
+with tab2:
+    st.subheader("📋 所有落注紀錄")
+    st.dataframe(df_bets, use_container_width=True)
