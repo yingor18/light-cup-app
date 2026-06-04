@@ -1,50 +1,40 @@
 import streamlit as st
 import pandas as pd
 import requests
+from datetime import datetime
 
-st.set_page_config(page_title="燈閪盃落注系統", layout="wide")
-
-# 1. 填入你剛剛更新過的 GAS 部署網址
+# 基礎設定
+st.set_page_config(page_title="燈閪盃全自動系統", layout="wide")
 GAS_URL = "https://script.google.com/macros/s/AKfycbziToDdXkbc-tG9G_snGu8CnEFAMHjAjVGT-uBecEB6CmPMt4xed_6U8VYAef45cW02gA/exec"
 
+# 數據讀取
 @st.cache_data(ttl=0)
-def load_data():
-    url = f"https://docs.google.com/spreadsheets/d/1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0/gviz/tq?tqx=out:csv&sheet=表單回覆 1"
-    try:
-        df = pd.read_csv(url)
-        df.columns = df.columns.str.strip()
-        return df
+def load_data(sheet_name):
+    url = f"https://docs.google.com/spreadsheets/d/1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    try: return pd.read_csv(url)
     except: return pd.DataFrame()
 
-# 獲取球員名單
-def get_players():
-    url = f"https://docs.google.com/spreadsheets/d/1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0/gviz/tq?tqx=out:csv&sheet=Players"
-    try:
-        df = pd.read_csv(url)
-        return df["人名"].dropna().tolist()
-    except: return []
+# 計分邏輯 (你之前搵返嘅重點)
+def calculate_score(h_score, a_score, handicap, is_fav, bet):
+    diff = (h_score - a_score + handicap) if is_fav else (a_score - h_score + handicap)
+    if diff > 0: return 10 if bet == "上盤" else -10
+    if diff < 0: return -10 if bet == "上盤" else 10
+    return 0
+
+# 顯示頁面
+df_matches = load_data("Matches")
+df_bets = load_data("表單回覆 1")
 
 st.title("🏆 燈閪盃全自動系統")
 
+# 落注區
 with st.sidebar.form("bet_form", clear_on_submit=True):
-    u = st.selectbox("你是誰？", ["請選擇"] + get_players())
-    m = st.text_input("輸入場次")
-    b = st.radio("投注方向", ["上盤", "下盤"])
-    sub = st.form_submit_button("🔥 確認提交")
-    
-    if sub:
-        if u == "請選擇" or m == "":
-            st.error("請填完整資料！")
-        else:
-            try:
-                # 發送請求
-                response = requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b}, timeout=15)
-                if "Success" in response.text:
-                    st.success("✅ 落注成功！")
-                else:
-                    st.error(f"❌ 寫入失敗: {response.text}")
-            except Exception as e:
-                st.error(f"連線錯誤: {e}")
+    u = st.text_input("兄弟名")
+    m = st.selectbox("場次", df_matches["場次"].tolist() if not df_matches.empty else [])
+    b = st.radio("盤口", ["上盤", "下盤"])
+    if st.form_submit_button("🔥 提交"):
+        requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
+        st.success("成功！")
 
-st.subheader("📋 實時落注紀錄")
-st.dataframe(load_data(), use_container_width=True)
+# 顯示榜
+st.dataframe(df_bets)
