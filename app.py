@@ -89,30 +89,23 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
             else:
                 st.error("提交失敗，請檢查網路")
 
-tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 投注紀錄"])
+# 刪除第 92 行，只留最下面呢個定義
+tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄"])
 
 with tab1:
-    st.subheader("🏆 燈閪盃手足排名")
+    st.subheader("🏆 燈閪盃足排名")
     st.dataframe(leaderboard, use_container_width=True, hide_index=True)
 
 with tab2:
     st.subheader("⚽ 比賽詳情")
     st.dataframe(df_matches_display, use_container_width=True)
-    # 1. 調整 Tabs 定義
-tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 全體兄弟落注"])
 
-# ... (tab1, tab2 嘅內容保持不變) ...
-
-# 2. 修改 tab3 的內容
 with tab3:
-    st.subheader("📋 投注紀錄")
-    
+    st.subheader("📋 手足落注紀錄")
     # 這裡直接使用你在 app.py 開頭讀取的 df_bets
     if not df_bets.empty:
-        # 只顯示你需要的欄位，隱藏太複雜的格式
+        # 只顯示這三欄
         display_df = df_bets[['人名', '場次', '投注']].copy()
-        
-        # 為了美觀，可以將「投注」欄位變成比較顯眼的樣子
         st.table(display_df)
     else:
-        st.write("目前仲未有人落注！")
+        st.write("目前仲未有人落注，再唔賭就無機會賭！")
