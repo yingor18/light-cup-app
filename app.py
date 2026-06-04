@@ -72,7 +72,7 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
 tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 投注紀錄"])
 
 with tab1:
-    st.subheader("🏆 燈閪盃兄弟排名")
+    st.subheader("🏆 燈閪盃手足排名")
     st.dataframe(leaderboard, use_container_width=True, hide_index=True)
 
 with tab2:
