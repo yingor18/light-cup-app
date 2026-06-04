@@ -35,10 +35,15 @@ if not df_bets.empty and "結果分類" in df_matches.columns:
 else:
     scores = {}
 
-# 建立 DataFrame 並排序
+# 修改排名計算邏輯
 leaderboard_data = [{"人名": p, "得分": scores.get(p, 0)} for p in all_players]
-leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False).reset_index(drop=True)
-leaderboard.insert(0, '排名', range(1, len(leaderboard) + 1))
+leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False)
+
+# 使用 min 排名法：同分會 share 同一個排名，且會跳過中間數字 (e.g., 1, 1, 3)
+leaderboard['排名'] = leaderboard['得分'].rank(method='min', ascending=False).astype(int)
+
+# 重新排序欄位
+leaderboard = leaderboard[['排名', '人名', '得分']]
 
 # --- 介面呈現 ---
 with st.sidebar.form("bet_form", clear_on_submit=True):
