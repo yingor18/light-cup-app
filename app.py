@@ -62,32 +62,34 @@ df_matches_display = df_matches.copy()
 df_matches_display.index = df_matches_display.index + 1
 
 # --- 介面 ---
-with st.sidebar.form("bet_form", clear_on_submit=True):
+# 呢個係完整且正確嘅 Form 邏輯，成個區塊只出現一次
+    with st.sidebar.form("bet_form", clear_on_submit=True):
         st.header("⚽ 手足落注")
-        # 下面呢幾行前面一定要有同樣數量嘅空格，唔好有錯位
         u = st.selectbox("選擇名字", options=all_players, index=None, placeholder="請選擇你的名字...")
         m = st.selectbox("選擇場次", options=df_matches["場次"].unique().tolist())
         b = st.radio("盤口", ["上盤", "下盤"])
         
-        # 仲有記得加埋個防呆檢查
         if st.form_submit_button("🔥 提交"):
             if u is None:
                 st.error("⚠️ 必須先選擇名字！")
             else:
-                # 這裡放你原本嗰段檢查重複投注同埋提交嘅邏輯
-    m = st.selectbox("選場次", df_matches["場次"].unique().tolist())
-    b = st.radio("盤口", ["上盤", "下盤"])
-    if st.form_submit_button("🔥 提交"):
-        # --- 新增：檢查重複投注 ---
-        # 讀取現有紀錄
-        df_current_bets = load_data("FinalBets")
-        
-        # 檢查該人名 + 該場次是否存在
-        is_duplicate = not df_current_bets[
-            (df_current_bets['人名'] == u) & 
-            (df_current_bets['場次'] == m)
-        ].empty
-        
+                # 讀取現有紀錄
+                df_current_bets = load_data("FinalBets")
+                # 檢查該人名 + 該場次是否存在
+                is_duplicate = not df_current_bets[
+                    (df_current_bets['人名'] == u) & 
+                    (df_current_bets['場次'] == m)
+                ].empty
+                
+                if is_duplicate:
+                    st.error(f"❌ {u} 已經投過 {m} 喇，唔可以重複落注！")
+                else:
+                    params = {'name': u, 'match': m, 'bet': b}
+                    response = requests.get(GAS_URL, params=params)
+                    if response.status_code == 200:
+                        st.success("提交成功！")
+                    else:
+                        st.error("提交失敗，請檢查網路")
         if is_duplicate:
             st.error(f"❌ {u} 已經投過 {m} 喇，唔可以重複落注！")
         else:
