@@ -105,7 +105,7 @@ tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋
 
 # 2. 修改 tab3 的內容
 with tab3:
-    st.subheader("📋 手足落注紀錄")
+    st.subheader("📋 投注紀錄")
     
     # 這裡直接使用你在 app.py 開頭讀取的 df_bets
     if not df_bets.empty:
@@ -115,4 +115,4 @@ with tab3:
         # 為了美觀，可以將「投注」欄位變成比較顯眼的樣子
         st.table(display_df)
     else:
-        st.write("目前仲未有人落注，快啲叫兄弟搶頭啖湯！")
+        st.write("目前仲未有人落注！")
