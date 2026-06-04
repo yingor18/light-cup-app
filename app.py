@@ -112,12 +112,12 @@ with tab1:
                 st.error(f"🚨 目前由 **{lowest_player}** 以 {lowest_score} 分領先成為【終極冥燈閪】！")
 
 with tab2:
-    st.header("📋 兄弟們落注詳細紀錄")
+    st.header("📋 投注詳細紀錄")
     if df_bets.empty:
         st.info("目前未有任何落注紀錄。")
     else:
         st.dataframe(df_bets, use_container_width=True)
 
 with tab3:
-    st.header("⚽ 現時讓球盤口一覽")
+    st.header("⚽ 即時讓球盤口一覽")
     st.dataframe(df_matches, use_container_width=True)
