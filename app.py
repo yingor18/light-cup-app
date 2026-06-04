@@ -75,7 +75,7 @@ def calculate_handicap_score(home_score, away_score, handicap, is_home_favorite,
     return 0
 
 # 主畫面分頁
-tab1, tab2, tab3 = st.tabs(["📊 實時冥燈榜", "🎲 兄弟們落注一覽", "⚽ 現時馬會讓球盤"])
+tab1, tab2, tab3 = st.tabs(["📊 燈閪榜", "🎲 投注一覽", "⚽ 即時馬會讓球盤"])
 
 players_list = df_players["人名"].dropna().str.strip().tolist() if "人名" in df_players.columns else []
 
