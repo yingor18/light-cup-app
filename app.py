@@ -2,21 +2,17 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import requests
+import urllib.parse
 
-# 設定
+# ==================== 設定區 ====================
 SHEET_ID = "1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0"
 GAS_URL = "https://script.google.com/macros/s/AKfycbziToDdXkbc-tG9G_snGu8CnEFAMHjAjVGT-uBecEB6CmPMt4xed_6U8VYAef45cW02gA/exec"
 
 st.set_page_config(layout="wide")
 st.title("🏆 世界盃 - 燈閪盃全自動系統")
 
-# 數據讀取
-@st.cache_data(ttl=0)
-import urllib.parse
-
 @st.cache_data(ttl=0)
 def load_data(sheet):
-    # 將中文工作表名稱進行 URL 編碼，解決 InvalidURL 錯誤
     encoded_sheet = urllib.parse.quote(sheet)
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={encoded_sheet}"
     return pd.read_csv(url)
@@ -26,7 +22,7 @@ df_bets = load_data("表單回覆 1")
 df_players = load_data("Players")
 players = df_players["人名"].dropna().tolist()
 
-# 封盤過濾 (檢查時間)
+# 封盤過濾
 active_matches = []
 for _, row in df_matches.iterrows():
     try:
@@ -34,7 +30,7 @@ for _, row in df_matches.iterrows():
             active_matches.append(str(row["場次"]))
     except: continue
 
-# 側邊欄落注
+# 落注區
 with st.sidebar.form("bet", clear_on_submit=True):
     u = st.selectbox("兄弟名", ["選擇"] + players)
     m = st.selectbox("場次", active_matches)
@@ -45,10 +41,9 @@ with st.sidebar.form("bet", clear_on_submit=True):
         else:
             try:
                 requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b}, timeout=10)
-                st.success("成功！")
+                st.success("成功！請稍候刷新")
             except Exception as e:
                 st.error(f"連線失敗: {e}")
 
-# 顯示區
 st.subheader("📊 積分榜與紀錄")
 st.dataframe(df_bets, use_container_width=True)
