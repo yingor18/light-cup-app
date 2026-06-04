@@ -18,14 +18,22 @@ def load_data(sheet):
     return pd.read_csv(url)
 
 # 1. 載入資料
+# 修改這一段，確保它是讀取你確認有資料的 "FinalBets"
 try:
     df_matches = load_data("Matches")
-    df_bets = load_data("FinalBets")  # 確保 Tab 名為 Bets
+    # 這裡明確指向 FinalBets
+    df_bets = load_data("FinalBets") 
     df_players = load_data("Players")
     all_players = df_players["人名"].dropna().astype(str).tolist()
+    
+    # --- 這裡增加強制檢查 ---
+    if df_bets.empty:
+        st.warning("偵測到 FinalBets 是空的，請檢查 Tab 名稱或資料是否已成功寫入")
+    else:
+        st.write(f"成功讀取到 {len(df_bets)} 筆投注紀錄") # 這行可以讓你確認是否有讀到資料
+
 except Exception as e:
-    st.error(f"讀取資料庫錯誤，請檢查 Tab 名稱 (Matches, Bets, Players): {e}")
-    st.stop()
+    st.error(f"讀取資料庫錯誤: {e}")
 
 # 2. 強制格式轉換，避免合併錯誤
 df_matches['場次'] = df_matches['場次'].astype(str).str.strip()
