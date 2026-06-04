@@ -5,7 +5,7 @@ import urllib.parse
 
 # 設定
 SHEET_ID = "1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0"
-GAS_URL = "https://script.google.com/macros/s/AKfycbxctDgzkNk_wD0xlpjKkCWeCRkSaASNBzR7oLzdXymfoFpy3g9cfZ1FbXRP7EM8TnsF1g/exec"
+GAS_URL = "https://script.google.com/macros/s/AKfycbxCluMNIcBIU55MRgtd4hldqTikmpMCu1NrrcFtO38eDDPwbtbCsXCGr_rdsVq-1FzWLA/exec"
 
 st.set_page_config(layout="wide", page_title="燈閪盃系統")
 st.title("🏆 世界盃 - 燈閪盃總覽")
