@@ -4,11 +4,11 @@ from datetime import datetime
 import requests
 import urllib.parse
 
-# ==================== 設定區 ====================
+# 設定
 SHEET_ID = "1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0"
 GAS_URL = "https://script.google.com/macros/s/AKfycbziToDdXkbc-tG9G_snGu8CnEFAMHjAjVGT-uBecEB6CmPMt4xed_6U8VYAef45cW02gA/exec"
 
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="燈閪盃", layout="wide")
 st.title("🏆 世界盃 - 燈閪盃全自動系統")
 
 @st.cache_data(ttl=0)
@@ -30,7 +30,7 @@ for _, row in df_matches.iterrows():
             active_matches.append(str(row["場次"]))
     except: continue
 
-# 落注區
+# 側邊欄落注
 with st.sidebar.form("bet", clear_on_submit=True):
     u = st.selectbox("兄弟名", ["選擇"] + players)
     m = st.selectbox("場次", active_matches)
@@ -39,11 +39,20 @@ with st.sidebar.form("bet", clear_on_submit=True):
         if u == "選擇": st.error("請選名！")
         elif not m: st.error("無賽事可選！")
         else:
-            try:
-                requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b}, timeout=10)
-                st.success("成功！請稍候刷新")
-            except Exception as e:
-                st.error(f"連線失敗: {e}")
+            requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
+            st.success("成功！請稍候刷新")
 
-st.subheader("📊 積分榜與紀錄")
-st.dataframe(df_bets, use_container_width=True)
+# 重新構建頁面 Tab
+tab1, tab2, tab3 = st.tabs(["📊 積分榜與紀錄", "⚽ 完整賽程", "📋 原始數據"])
+
+with tab1:
+    st.subheader("實時落注紀錄")
+    st.dataframe(df_bets, use_container_width=True)
+
+with tab2:
+    st.subheader("待開賽場次")
+    st.dataframe(df_matches, use_container_width=True)
+
+with tab3:
+    st.write("系統底層數據檢查：")
+    st.json({"players_count": len(players), "active_matches_count": len(active_matches)})
