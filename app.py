@@ -88,10 +88,14 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
     else:
         m = st.selectbox("選擇場次", options=available_matches)
         
-        # --- 喺呢度動態判斷平手盤 ---
-        current_match_info = df_matches[df_matches['場次'] == m].iloc[0]
-        handicap_team = str(current_match_info['讓球球隊']).strip()
+        # --- 修正後的動態判斷平手盤 (精準篩選) ---
+        match_filter = df_matches['場次'].str.strip() == str(m).strip()
         
+        if not df_matches[match_filter].empty:
+            current_match_info = df_matches[match_filter].iloc[0]
+            handicap_team = str(current_match_info['讓球球隊']).strip()
+        else:
+            handicap_team = "未知"
         if "平手" in handicap_team or handicap_team == "0":
             # 拆出主隊名稱（左邊嗰隊）
             home_team = m.split(" vs ")[0] if " vs " in m else "主隊"
