@@ -67,50 +67,51 @@ from datetime import datetime
 
 # 在 form 裡面執行邏輯
 # 確保喺呢個 with 區塊入面，所有嘢都縮排 4 個空格
-with st.sidebar.form("bet_form", clear_on_submit=True):
-    st.header("⚽ 手足落注")
+# --- 1. 先在 Form 外面處理「即時同步」嘅選單同時間 ---
+hk_tz = pytz.timezone('Asia/Hong_Kong')
+now_hk = datetime.now(hk_tz)
+
+st.sidebar.header("⚽ 手足落注")
+
+# 名字選單（放在外面，以便即時互動）
+u = st.sidebar.selectbox("選擇名字", options=all_players, index=None, placeholder="請選擇你的名字...")
+
+# 篩選掉已開波場次
+df_matches['開賽時間_dt'] = pd.to_datetime(df_matches['開賽時間']).dt.tz_localize(hk_tz)
+available_matches = df_matches[df_matches['開賽時間_dt'] > now_hk]['場次'].tolist()
+
+if not available_matches:
+    st.sidebar.warning("🚫 全部比賽已開波，無得再落注。")
+else:
+    # 場次選單搬到 Form 外面，一轉場次網頁就會即時 Re-run 更新下面個讓球隊！
+    m = st.sidebar.selectbox("選擇場次", options=available_matches)
     
-    # 時間處理
-    hk_tz = pytz.timezone('Asia/Hong_Kong')
-    now_hk = datetime.now(hk_tz)
-    
-    u = st.selectbox("選擇名字", options=all_players, index=None, placeholder="請選擇你的名字...")
-    
-    # 篩選掉已開波場次
-    df_matches['開賽時間_dt'] = pd.to_datetime(df_matches['開賽時間']).dt.tz_localize(hk_tz)
-    available_matches = df_matches[df_matches['開賽時間_dt'] > now_hk]['場次'].tolist()
-    
-    if not available_matches:
-        st.warning("🚫 全部比賽已開波，無得再落注。")
-        m = st.selectbox("選擇場次", options=["無"], disabled=True)
-        st.radio("盤口", ["上盤", "下盤"], disabled=True)
-        st.form_submit_button("🚫 已封盤", disabled=True)
+    # 即時精準篩選當前揀緊嘅場次
+    match_filter = df_matches['場次'].str.strip() == str(m).strip()
+    if not df_matches[match_filter].empty:
+        current_match_info = df_matches[match_filter].iloc[0]
+        handicap_team = str(current_match_info['讓球球隊']).strip()
     else:
-        m = st.selectbox("選擇場次", options=available_matches)
+        handicap_team = "未知"
+
+    # 即時動態判定平手盤
+    if "平手" in handicap_team or handicap_team == "0" or handicap_team == "平":
+        home_team = m.split(" vs ")[0] if " vs " in str(m) else "主隊"
+        radio_label = f"盤口 (平手盤：上盤代表 {home_team})"
+    else:
+        radio_label = f"盤口 (讓球隊：{handicap_team})"
+
+    # --- 2. 這裡才是真正的 Form，只放需要被提交嘅數據 ---
+    with st.sidebar.form("bet_form", clear_on_submit=True):
         
-        # --- 修正後的動態判斷平手盤 (精準篩選) ---
-        match_filter = df_matches['場次'].str.strip() == str(m).strip()
-        
-        if not df_matches[match_filter].empty:
-            current_match_info = df_matches[match_filter].iloc[0]
-            handicap_team = str(current_match_info['讓球球隊']).strip()
-        else:
-            handicap_team = "未知"
-        if "平手" in handicap_team or handicap_team == "0":
-            # 拆出主隊名稱（左邊嗰隊）
-            home_team = m.split(" vs ")[0] if " vs " in m else "主隊"
-            radio_label = f"盤口 (平手盤：上盤代表 {home_team})"
-        else:
-            radio_label = f"盤口 (讓球隊：{handicap_team})"
-            
         b = st.radio(radio_label, ["上盤", "下盤"])
-        # ----------------------------
         
         # 提交按鈕
         if st.form_submit_button("🔥 提交"):
             if u is None:
                 st.error("⚠️ 必須先選擇名字！")
             else:
+                # 重新讀取防止重複落注
                 df_current = load_data("FinalBets")
                 if not df_current[(df_current['人名'] == u) & (df_current['場次'] == m)].empty:
                     st.error("❌ 呢場你投過喇，唔准改！")
