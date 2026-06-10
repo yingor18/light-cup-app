@@ -66,60 +66,44 @@ import pytz # 記得喺 requirements.txt 加一行 pytz
 from datetime import datetime
 
 # 在 form 裡面執行邏輯
+# 確保喺呢個 with 區塊入面，所有嘢都縮排 4 個空格
 with st.sidebar.form("bet_form", clear_on_submit=True):
     st.header("⚽ 手足落注")
     
-    # 1. 取得香港時間
+    # 時間處理
     hk_tz = pytz.timezone('Asia/Hong_Kong')
     now_hk = datetime.now(hk_tz)
     
     u = st.selectbox("選擇名字", options=all_players, index=None, placeholder="請選擇你的名字...")
-    # 1. 取得香港時間
-hk_tz = pytz.timezone('Asia/Hong_Kong')
-now_hk = datetime.now(hk_tz)
-
-# 2. 將開賽時間轉做 datetime 格式以便比較
-df_matches['開賽時間_dt'] = pd.to_datetime(df_matches['開賽時間']).dt.tz_localize(hk_tz)
-
-# 3. 過濾：只留下「還未開波」的場次
-# 只有開賽時間大於現在時間的，才會顯示在選單裡
-available_matches = df_matches[df_matches['開賽時間_dt'] > now_hk]['場次'].tolist()
-
-# 4. 如果所有比賽都踢完，給一個提示
-if not available_matches:
-    st.sidebar.warning("🚫 全部比賽已開波，暫無可落注場次。")
-    m = st.sidebar.selectbox("選擇場次", options=["無可落注場次"], disabled=True)
-else:
-    m = st.sidebar.selectbox("選擇場次", options=available_matches)
-    b = st.radio("盤口", ["上盤", "下盤"])
     
-    # 2. 獲取該場次的開賽時間 (假設你表格內的格式是 "2026/6/12 3:00")
-    target_match = df_matches[df_matches['場次'] == m].iloc[0]
-    match_time_str = target_match['開賽時間']
-    match_time = pd.to_datetime(match_time_str).tz_localize(hk_tz)
+    # 篩選掉已開波場次
+    df_matches['開賽時間_dt'] = pd.to_datetime(df_matches['開賽時間']).dt.tz_localize(hk_tz)
+    available_matches = df_matches[df_matches['開賽時間_dt'] > now_hk]['場次'].tolist()
     
-    # 3. 封盤判斷
-    is_closed = now_hk >= match_time
-    
-    if is_closed:
-        st.error(f"❌ {m} 已經開波 (開賽時間: {match_time_str})，封盤！")
+    if not available_matches:
+        st.warning("🚫 全部比賽已開波，無得再落注。")
+        m = st.selectbox("選擇場次", options=["無"], disabled=True)
+        b = st.radio("盤口", ["上盤", "下盤"], disabled=True)
         st.form_submit_button("🚫 已封盤", disabled=True)
     else:
+        m = st.selectbox("選擇場次", options=available_matches)
+        b = st.radio("盤口", ["上盤", "下盤"])
+        
+        # 提交按鈕一定喺呢度，喺 form 裡面
         if st.form_submit_button("🔥 提交"):
             if u is None:
                 st.error("⚠️ 必須先選擇名字！")
             else:
-                # 再次讀取最新紀錄檢查重複
                 df_current = load_data("FinalBets")
                 if not df_current[(df_current['人名'] == u) & (df_current['場次'] == m)].empty:
-                    st.error("❌ 你已經投過呢場波喇，唔准改！")
+                    st.error("❌ 呢場你投過喇，唔准改！")
                 else:
                     params = {'name': u, 'match': m, 'bet': b}
                     response = requests.get(GAS_URL, params=params)
                     if response.status_code == 200:
                         st.success("提交成功！")
                     else:
-                        st.error("系統繁忙，稍後再試")
+                        st.error("系統繁忙")
 
 # 刪除第 92 行，只留最下面呢個定義
 tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄"])
