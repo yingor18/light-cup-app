@@ -62,37 +62,48 @@ df_matches_display = df_matches.copy()
 df_matches_display.index = df_matches_display.index + 1
 
 # --- 介面 ---
+import pytz # 記得喺 requirements.txt 加一行 pytz
+from datetime import datetime
+
+# 在 form 裡面執行邏輯
 with st.sidebar.form("bet_form", clear_on_submit=True):
     st.header("⚽ 手足落注")
+    
+    # 1. 取得香港時間
+    hk_tz = pytz.timezone('Asia/Hong_Kong')
+    now_hk = datetime.now(hk_tz)
+    
     u = st.selectbox("選擇名字", options=all_players, index=None, placeholder="請選擇你的名字...")
     m = st.selectbox("選擇場次", options=df_matches["場次"].unique().tolist())
     b = st.radio("盤口", ["上盤", "下盤"])
     
-    if st.form_submit_button("🔥 提交"):
-        if u is None:
-            st.error("⚠️ 必須先選擇名字！")
-        else:
-            df_current_bets = load_data("FinalBets")
-            is_duplicate = not df_current_bets[(df_current_bets['人名'] == u) & (df_current_bets['場次'] == m)].empty
-            if is_duplicate:
-                st.error(f"❌ {u} 已經投過 {m} 喇！")
+    # 2. 獲取該場次的開賽時間 (假設你表格內的格式是 "2026/6/12 3:00")
+    target_match = df_matches[df_matches['場次'] == m].iloc[0]
+    match_time_str = target_match['開賽時間']
+    match_time = pd.to_datetime(match_time_str).tz_localize(hk_tz)
+    
+    # 3. 封盤判斷
+    is_closed = now_hk >= match_time
+    
+    if is_closed:
+        st.error(f"❌ {m} 已經開波 (開賽時間: {match_time_str})，封盤！")
+        st.form_submit_button("🚫 已封盤", disabled=True)
+    else:
+        if st.form_submit_button("🔥 提交"):
+            if u is None:
+                st.error("⚠️ 必須先選擇名字！")
             else:
-                params = {'name': u, 'match': m, 'bet': b}
-                response = requests.get(GAS_URL, params=params)
-                if response.status_code == 200:
-                    st.success("提交成功！")
+                # 再次讀取最新紀錄檢查重複
+                df_current = load_data("FinalBets")
+                if not df_current[(df_current['人名'] == u) & (df_current['場次'] == m)].empty:
+                    st.error("❌ 你已經投過呢場波喇，唔准改！")
                 else:
-                    st.error("提交失敗")
-        if is_duplicate:
-            st.error(f"❌ {u} 已經投過 {m} 喇，唔可以重複落注！")
-        else:
-            # 傳送參數
-            params = {'name': u, 'match': m, 'bet': b}
-            response = requests.get(GAS_URL, params=params)
-            if response.status_code == 200:
-                st.success("提交成功！")
-            else:
-                st.error("提交失敗，請檢查網路")
+                    params = {'name': u, 'match': m, 'bet': b}
+                    response = requests.get(GAS_URL, params=params)
+                    if response.status_code == 200:
+                        st.success("提交成功！")
+                    else:
+                        st.error("系統繁忙，稍後再試")
 
 # 刪除第 92 行，只留最下面呢個定義
 tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄"])
