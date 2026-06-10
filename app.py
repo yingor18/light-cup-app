@@ -83,13 +83,26 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
     if not available_matches:
         st.warning("🚫 全部比賽已開波，無得再落注。")
         m = st.selectbox("選擇場次", options=["無"], disabled=True)
-        b = st.radio("盤口", ["上盤", "下盤"], disabled=True)
+        st.radio("盤口", ["上盤", "下盤"], disabled=True)
         st.form_submit_button("🚫 已封盤", disabled=True)
     else:
         m = st.selectbox("選擇場次", options=available_matches)
-        b = st.radio("盤口", ["上盤", "下盤"])
         
-        # 提交按鈕一定喺呢度，喺 form 裡面
+        # --- 喺呢度動態判斷平手盤 ---
+        current_match_info = df_matches[df_matches['場次'] == m].iloc[0]
+        handicap_team = str(current_match_info['讓球球隊']).strip()
+        
+        if "平手" in handicap_team or handicap_team == "0":
+            # 拆出主隊名稱（左邊嗰隊）
+            home_team = m.split(" vs ")[0] if " vs " in m else "主隊"
+            radio_label = f"盤口 (平手盤：上盤代表 {home_team})"
+        else:
+            radio_label = f"盤口 (讓球隊：{handicap_team})"
+            
+        b = st.radio(radio_label, ["上盤", "下盤"])
+        # ----------------------------
+        
+        # 提交按鈕
         if st.form_submit_button("🔥 提交"):
             if u is None:
                 st.error("⚠️ 必須先選擇名字！")
