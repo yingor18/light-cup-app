@@ -74,7 +74,23 @@ with st.sidebar.form("bet_form", clear_on_submit=True):
     now_hk = datetime.now(hk_tz)
     
     u = st.selectbox("選擇名字", options=all_players, index=None, placeholder="請選擇你的名字...")
-    m = st.selectbox("選擇場次", options=df_matches["場次"].unique().tolist())
+    # 1. 取得香港時間
+hk_tz = pytz.timezone('Asia/Hong_Kong')
+now_hk = datetime.now(hk_tz)
+
+# 2. 將開賽時間轉做 datetime 格式以便比較
+df_matches['開賽時間_dt'] = pd.to_datetime(df_matches['開賽時間']).dt.tz_localize(hk_tz)
+
+# 3. 過濾：只留下「還未開波」的場次
+# 只有開賽時間大於現在時間的，才會顯示在選單裡
+available_matches = df_matches[df_matches['開賽時間_dt'] > now_hk]['場次'].tolist()
+
+# 4. 如果所有比賽都踢完，給一個提示
+if not available_matches:
+    st.sidebar.warning("🚫 全部比賽已開波，暫無可落注場次。")
+    m = st.sidebar.selectbox("選擇場次", options=["無可落注場次"], disabled=True)
+else:
+    m = st.sidebar.selectbox("選擇場次", options=available_matches)
     b = st.radio("盤口", ["上盤", "下盤"])
     
     # 2. 獲取該場次的開賽時間 (假設你表格內的格式是 "2026/6/12 3:00")
