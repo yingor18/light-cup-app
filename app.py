@@ -53,7 +53,7 @@ else:
     scores = {}
 
 # =========================================================
-# 🏆 終極計分與排行榜邏輯 (字眼已更新：贏全、贏半、輸全、輸半)
+# 🏆 終極計分與排行榜邏輯 (解決 0分 兼 欄位衝突 Bug)
 # =========================================================
 
 # 初始化一個 dictionary 記錄每位手足的分數
@@ -66,9 +66,16 @@ if not df_bets.empty and not df_matches.empty:
     # 逐行檢查每個人投得對不對
     for index, row in df_merged.iterrows():
         player_name = row['人名']
-        # 自動適應你 Google Sheet 嘅欄位名稱（盤口或投注）
-        user_bet = str(row['盤口']).strip() if '盤口' in row else str(row['投注']).strip()
-        match_result = str(row['賽果分類']).strip() # 你在 Google Sheet 填的賽果
+        
+        # 【核心修正】因為兩張 Sheet 都有「盤口」，df_bets 嗰欄合併後會自動變成 '盤口_x'
+        if '盤口_x' in row:
+            user_bet = str(row['盤口_x']).strip()
+        elif '投注' in row:
+            user_bet = str(row['投注']).strip()
+        else:
+            user_bet = str(row['盤口']).strip()
+            
+        match_result = str(row['賽果分類']).strip() # 對應你 Google Sheet H欄嘅「賽果分類」
         
         # 預設每場得分
         current_score = 0
@@ -95,8 +102,6 @@ if not df_bets.empty and not df_matches.empty:
             elif match_result == '贏全':    # 代表上盤贏全，下盤就輸全
                 current_score = 0
                 
-        # 【狀況三：走盤或未開波】一律 0 分
-        
         # 將分數加進該手足的總分
         if player_name in player_scores:
             player_scores[player_name] += current_score
