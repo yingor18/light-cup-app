@@ -192,11 +192,19 @@ with tab2:
     st.dataframe(df_matches_display, use_container_width=True)
 
 with tab3:
-    st.subheader("📋 手足落注紀錄")
-    # 這裡直接使用你在 app.py 開頭讀取的 df_bets
-    if not df_bets.empty:
-        # 只顯示這三欄
-        display_df = df_bets[['人名', '場次', '投注']].copy()
-        st.table(display_df)
-    else:
-        st.write("目前仲未有人落注，再唔賭就無機會賭！")
+    # 假設你原本叫 Tab3 或者落注紀錄嘅區塊
+# 1. 攞到所有有落注紀錄嘅場次清單
+if not df_bets.empty:
+    st.subheader("📋 按場次查看落注")
+    
+    # 畀大家揀想睇邊場
+    all_bet_matches = df_bets['場次'].unique().tolist()
+    selected_view_match = st.selectbox("請選擇想查看的場次：", options=all_bet_matches)
+    
+    # 篩選出嗰場波嘅紀錄，並按投注（上/下盤）排序，方便對比
+    df_filtered_view = df_bets[df_bets['場次'] == selected_view_match].sort_values(by="投注")
+    
+    # 只顯示人名同投注盤口，睇得更舒服
+    st.dataframe(df_filtered_view[['人名', '投注']].reset_index(drop=True), use_container_width=True)
+else:
+    st.info("暫時未有手足落注紀錄。")
