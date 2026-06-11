@@ -52,11 +52,63 @@ if not df_bets.empty and "結果分類" in df_matches.columns:
 else:
     scores = {}
 
-leaderboard_data = [{"人名": p, "得分": scores.get(p, 0)} for p in all_players]
-leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="得分", ascending=False).reset_index(drop=True)
+# =========================================================
+# 🏆 終極計分與排行榜邏輯 (字眼已更新：贏全、贏半、輸全、輸半)
+# =========================================================
+
+# 初始化一個 dictionary 記錄每位手足的分數
+player_scores = {player: 0 for player in all_players}
+
+if not df_bets.empty and not df_matches.empty:
+    # 合併落注紀錄同賽程表
+    df_merged = pd.merge(df_bets, df_matches, on='場次', how='inner')
+    
+    # 逐行檢查每個人投得對不對
+    for index, row in df_merged.iterrows():
+        player_name = row['人名']
+        # 自動適應你 Google Sheet 嘅欄位名稱（盤口或投注）
+        user_bet = str(row['盤口']).strip() if '盤口' in row else str(row['投注']).strip()
+        match_result = str(row['賽果分類']).strip() # 你在 Google Sheet 填的賽果
+        
+        # 預設每場得分
+        current_score = 0
+        
+        # 【狀況一：手足落注係「上盤」】
+        if user_bet == '上盤':
+            if match_result == '贏全':
+                current_score = 10
+            elif match_result == '贏半':
+                current_score = 5
+            elif match_result == '輸半':  # 代表下盤贏半，上盤就輸半
+                current_score = -5
+            elif match_result == '輸全':  # 代表下盤贏全，上盤就輸全
+                current_score = 0
+                
+        # 【狀況二：手足落注係「下盤」】
+        elif user_bet == '下盤':
+            if match_result == '輸全':    # 你打「輸全」代表下盤全贏
+                current_score = 10
+            elif match_result == '輸半':    # 你打「輸半」代表下盤贏一半
+                current_score = 5
+            elif match_result == '贏半':    # 代表上盤贏半，下盤就輸半
+                current_score = -5
+            elif match_result == '贏全':    # 代表上盤贏全，下盤就輸全
+                current_score = 0
+                
+        # 【狀況三：走盤或未開波】一律 0 分
+        
+        # 將分數加進該手足的總分
+        if player_name in player_scores:
+            player_scores[player_name] += current_score
+
+# 將結果轉換成 DataFrame 顯示在網頁上
+leaderboard_data = [{'人名': name, '得分': score} for name, score in player_scores.items()]
+leaderboard = pd.DataFrame(leaderboard_data)
+
+# 排序並加上排名
+leaderboard = leaderboard.sort_values(by="得分", ascending=False).reset_index(drop=True)
 leaderboard['排名'] = leaderboard['得分'].rank(method='min', ascending=False).astype(int)
 leaderboard = leaderboard[['排名', '人名', '得分']]
-
 # 5. 賽程表處理 (從 1 開始)
 df_matches_display = df_matches.copy()
 df_matches_display.index = df_matches_display.index + 1
