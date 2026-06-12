@@ -180,7 +180,7 @@ else:
 tab1, tab2, tab3 = st.tabs(["📊 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄"])
 
 with tab1:
-    st.subheader("🏆 燈閪盃足排名")
+    st.subheader("🏆 燈閪盃燈閪排名")
     st.dataframe(leaderboard, use_container_width=True, hide_index=True)
 
 with tab2:
