@@ -53,10 +53,10 @@ else:
     scores = {}
 
 # =========================================================
-# 🏆 終極計分與排行榜邏輯 (解決 0分 兼 欄位衝突 Bug)
+# 🏆 終極計分與排行榜邏輯 (0分起步，支援負分無底線扣分)
 # =========================================================
 
-# 初始化一個 dictionary 記錄每位手足的分數
+# 由 0 分開始初始化，買錯直接變負數
 player_scores = {player: 0 for player in all_players}
 
 if not df_bets.empty and not df_matches.empty:
@@ -67,7 +67,7 @@ if not df_bets.empty and not df_matches.empty:
     for index, row in df_merged.iterrows():
         player_name = row['人名']
         
-        # 【核心修正】因為兩張 Sheet 都有「盤口」，df_bets 嗰欄合併後會自動變成 '盤口_x'
+        # 欄位安全衝突處理
         if '盤口_x' in row:
             user_bet = str(row['盤口_x']).strip()
         elif '投注' in row:
@@ -75,9 +75,9 @@ if not df_bets.empty and not df_matches.empty:
         else:
             user_bet = str(row['盤口']).strip()
             
-        match_result = str(row['賽果分類']).strip() # 對應你 Google Sheet H欄嘅「賽果分類」
+        match_result = str(row['賽果分類']).strip() # 你在 Google Sheet 填的賽果
         
-        # 預設每場得分
+        # 預設每場增減分
         current_score = 0
         
         # 【狀況一：手足落注係「上盤」】
@@ -86,9 +86,9 @@ if not df_bets.empty and not df_matches.empty:
                 current_score = 10
             elif match_result == '贏半':
                 current_score = 5
-            elif match_result == '輸半':  # 代表下盤贏半，上盤就輸半
+            elif match_result == '輸半':  # 代表上盤「輸半」
                 current_score = -5
-            elif match_result == '輸全':  # 代表下盤贏全，上盤就輸全
+            elif match_result == '輸全':  # 代表上盤「輸全」
                 current_score = 0
                 
         # 【狀況二：手足落注係「下盤」】
@@ -102,7 +102,7 @@ if not df_bets.empty and not df_matches.empty:
             elif match_result == '贏全':    # 代表上盤贏全，下盤就輸全
                 current_score = 0
                 
-        # 將分數加進該手足的總分
+        # 將分數加進（或扣除）該手足的總分
         if player_name in player_scores:
             player_scores[player_name] += current_score
 
@@ -110,14 +110,10 @@ if not df_bets.empty and not df_matches.empty:
 leaderboard_data = [{'人名': name, '得分': score} for name, score in player_scores.items()]
 leaderboard = pd.DataFrame(leaderboard_data)
 
-# 排序並加上排名
+# 排序並加上排名 (負分都會照樣由大到小排落去)
 leaderboard = leaderboard.sort_values(by="得分", ascending=False).reset_index(drop=True)
 leaderboard['排名'] = leaderboard['得分'].rank(method='min', ascending=False).astype(int)
 leaderboard = leaderboard[['排名', '人名', '得分']]
-# 5. 賽程表處理 (從 1 開始)
-df_matches_display = df_matches.copy()
-df_matches_display.index = df_matches_display.index + 1
-
 # --- 介面 ---
 import pytz # 記得喺 requirements.txt 加一行 pytz
 from datetime import datetime
