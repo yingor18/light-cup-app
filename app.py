@@ -53,10 +53,10 @@ else:
     scores = {}
 
 # =========================================================
-# 🏆 終極計分與排行榜邏輯 (0分起步，支援負分無底線扣分)
+# 🏆 終極計分與排行榜邏輯 (買錯全輸扣10分、半輸扣5分，支援負分)
 # =========================================================
 
-# 由 0 分開始初始化，買錯直接變負數
+# 由 0 分開始初始化
 player_scores = {player: 0 for player in all_players}
 
 if not df_bets.empty and not df_matches.empty:
@@ -88,8 +88,8 @@ if not df_bets.empty and not df_matches.empty:
                 current_score = 5
             elif match_result == '輸半':  # 代表上盤「輸半」
                 current_score = -5
-            elif match_result == '輸全':  # 代表上盤「輸全」
-                current_score = 0
+            elif match_result == '輸全':  # 代表上盤「輸全」 -> 狠狠扣 10 分！
+                current_score = -10
                 
         # 【狀況二：手足落注係「下盤」】
         elif user_bet == '下盤':
@@ -99,8 +99,8 @@ if not df_bets.empty and not df_matches.empty:
                 current_score = 5
             elif match_result == '贏半':    # 代表上盤贏半，下盤就輸半
                 current_score = -5
-            elif match_result == '贏全':    # 代表上盤贏全，下盤就輸全
-                current_score = 0
+            elif match_result == '贏全':    # 代表上盤贏全，下盤就輸全 -> 狠狠扣 10 分！
+                current_score = -10
                 
         # 將分數加進（或扣除）該手足的總分
         if player_name in player_scores:
@@ -110,7 +110,7 @@ if not df_bets.empty and not df_matches.empty:
 leaderboard_data = [{'人名': name, '得分': score} for name, score in player_scores.items()]
 leaderboard = pd.DataFrame(leaderboard_data)
 
-# 排序並加上排名 (負分都會照樣由大到小排落去)
+# 排序並加上排名
 leaderboard = leaderboard.sort_values(by="得分", ascending=False).reset_index(drop=True)
 leaderboard['排名'] = leaderboard['得分'].rank(method='min', ascending=False).astype(int)
 leaderboard = leaderboard[['排名', '人名', '得分']]
