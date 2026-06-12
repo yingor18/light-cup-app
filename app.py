@@ -178,9 +178,10 @@ else:
 
 # 刪除第 92 行，只留最下面呢個定義
 tab1, tab2, tab3, tab4 = st.tabs(["🏆 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄", "📊 勝率統計"])
-with tab1:
-    st.subheader("🏆 燈閪盃燈閪排名")
-    st.dataframe(leaderboard, use_container_width=True, hide_index=True)
+
+    with tab1:
+        st.subheader("🏆 燈閣盃排名")
+        st.dataframe(leaderboard, use_container_width=True, hide_index=True)
 
 with tab2:
     st.subheader("⚽ 比賽詳情")
