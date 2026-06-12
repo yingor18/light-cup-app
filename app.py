@@ -282,8 +282,11 @@ with tab4:
             })
             
         df_stats = pd.DataFrame(stats_list)
-        df_stats = df_stats.sort_values(by="_sort_rate", ascending=False).reset_index(drop=True)
-        df_stats['勝率排名'] = range(1, len(df_stats) + 1)
+# 先按勝率高低排序，若勝率相同則按總投注場數多寡排序 (多啲場數頂住相同勝率更威水)
+        df_stats = df_stats.sort_values(by=["_sort_rate", "總有效投注"], ascending=[False, False]).reset_index(drop=True)
+        
+        # 使用 min 排名法：相同勝率就並列第一，下一位直接跳第三
+        df_stats['勝率排名'] = df_stats['_sort_rate'].rank(method='min', ascending=False).astype(int)
         
         # 【優化欄位】將全中同中半合併，隱藏舊欄位
         df_stats['勝出場數'] = df_stats['注碼全中'] + df_stats['注碼中半']
