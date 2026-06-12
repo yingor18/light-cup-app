@@ -185,7 +185,13 @@ with tab1:
 
 with tab2:
     st.subheader("⚽ 比賽詳情")
-    st.dataframe(df_matches_display, use_container_width=True)
+    if not df_matches.empty:
+        # 挑選大家最想睇嘅欄位，並過濾掉背後計算用嘅 dt 欄位
+        display_cols = [c for c in ['場次', '讓球球隊', '盤口', '開賽時間', '賽果分數', '賽果分類'] if c in df_matches.columns]
+        df_matches_display = df_matches[display_cols]
+        st.dataframe(df_matches_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("暫時未有賽程資料。")
 
 with tab3:
         if not df_bets.empty:
