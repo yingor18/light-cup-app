@@ -216,7 +216,7 @@ with tab3:
 # 📊 Tab 4: 手足個人勝率統計爆破版 (並列排名 + 下場心水頂格版)
 # =========================================================
 with tab4:
-    st.subheader("📊 手足個人勝率排行榜 (走盤不計)")
+    st.subheader("📊 個人勝率排行榜")
     
     if not df_bets.empty and not df_matches.empty:
         # 合併落注紀錄同賽程表 (計勝率用)
