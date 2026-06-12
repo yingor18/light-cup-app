@@ -37,7 +37,20 @@ except Exception as e:
 
 # 2. 強制格式轉換，避免合併錯誤
 df_matches['場次'] = df_matches['場次'].astype(str).str.strip()
-df_bets['場次'] = df_bets['場次'].astype(str).str.strip()
+# --- 📌 自動過濾 Sidebar「選擇場次」選單，完場自動消失 ---
+df_sidebar_unplayed = df_matches[
+    df_matches['結果分類'].isna() | 
+    (df_matches['結果分類'].astype(str).str.strip() == '') | 
+    (df_matches['結果分類'].astype(str).str.strip() == 'nan')
+] if '結果分類' in df_matches.columns else df_matches[
+    df_matches['賽果分類'].isna() | 
+    (df_matches['賽果分類'].astype(str).str.strip() == '') | 
+    (df_matches['賽果分類'].astype(str).str.strip() == 'nan')
+]
+
+# 提取出未完場嘅比賽清單
+sidebar_available_matches = df_sidebar_unplayed['場次'].astype(str).str.strip().tolist()
+# -------------------------------------------------------------
 
 # 3. 計分邏輯
 def get_points(res):
@@ -130,8 +143,13 @@ st.sidebar.header("⚽ 手足落注")
 u = st.sidebar.selectbox("選擇名字", options=all_players, index=None, placeholder="請選擇你的名字...")
 
 # 篩選掉已開波場次
-df_matches['開賽時間_dt'] = pd.to_datetime(df_matches['開賽時間']).dt.tz_localize(hk_tz)
-available_matches = df_matches[df_matches['開賽時間_dt'] > now_hk]['場次'].tolist()
+# # 篩選掉已填寫賽果的場次（完場自動消失）
+if '結果分類' in df_matches.columns:
+    df_sidebar_unplayed = df_matches[df_matches['結果分類'].isna() | (df_matches['結果分類'].astype(str).str.strip() == '') | (df_matches['結果分類'].astype(str).str.strip() == 'nan')]
+else:
+    df_sidebar_unplayed = df_matches[df_matches['賽果分類'].isna() | (df_matches['賽果分類'].astype(str).str.strip() == '') | (df_matches['賽果分類'].astype(str).str.strip() == 'nan')]
+
+available_matches = df_sidebar_unplayed['場次'].astype(str).str.strip().tolist()
 
 if not available_matches:
     st.sidebar.warning("🚫 全部比賽已開波，無得再落注。")
