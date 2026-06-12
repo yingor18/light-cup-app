@@ -285,7 +285,11 @@ with tab4:
         df_stats = df_stats.sort_values(by="_sort_rate", ascending=False).reset_index(drop=True)
         df_stats['勝率排名'] = range(1, len(df_stats) + 1)
         
-        df_stats_display = df_stats[['勝率排名', '人名', '總有效投注', '注碼全中', '注碼中半', '實際勝率']]
+        # 【優化欄位】將全中同中半合併，隱藏舊欄位
+        df_stats['勝出場數'] = df_stats['注碼全中'] + df_stats['注碼中半']
+        
+        # 整理出街嘅欄位
+        df_stats_display = df_stats[['勝率排名', '人名', '總有效投注', '勝出場數', '實際勝率']]
         st.dataframe(df_stats_display, use_container_width=True, hide_index=True)
         st.caption("💡 註：勝率計算公式 = (全中場數 + 中半場數) / 總有效落注場數。贏半亦當作勝出 1 場計算。未開波或走盤之場次不計。")
     else:
