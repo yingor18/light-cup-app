@@ -213,22 +213,31 @@ with tab3:
             st.info("暫時未有手足落注紀錄。")
             # =========================================================
 # =========================================================
-# 📊 Tab 4: 手足個人勝率統計爆破版 (並列排名 + 下場心水頂格版)
+# 📊 Tab 4: 手足個人勝率統計爆破版 (精準防滯留 + 下場心水)
 # =========================================================
 with tab4:
-    st.subheader("📊 個人勝率排行榜")
+    st.subheader("📊 手足個人勝率排行榜 (走盤不計)")
     
     if not df_bets.empty and not df_matches.empty:
         # 合併落注紀錄同賽程表 (計勝率用)
         df_merged_stats = pd.merge(df_bets, df_matches, on='場次', how='inner')
         
-        # 1. 搵出下一場最新未開波/未填賽果嘅比賽
+        # 1. 【核心修正】精準搵出「真正未完場且有落注」嘅下一場比賽
         upcoming_match = ""
-        # 篩選出賽果分類空白、nan 或者是空的場次
+        # 先篩選出所有未填賽果嘅比賽
         df_unplayed = df_matches[df_matches['賽果分類'].isna() | (df_matches['賽果分類'].astype(str).str.strip() == '') | (df_matches['賽果分類'].astype(str).str.strip() == 'nan')]
+        
         if not df_unplayed.empty:
-            # 攞第一場未開嘅比賽
-            upcoming_match = str(df_unplayed.iloc[0]['場次']).strip()
+            # 去 df_bets 睇吓呢啲未完嘅場次，邊場最快有人落咗注
+            unplayed_match_list = df_unplayed['場次'].astype(str).str.strip().tolist()
+            df_bets_active = df_bets[df_bets['場次'].astype(str).str.strip().isin(unplayed_match_list)]
+            
+            if not df_bets_active.empty:
+                # 邊場有落注紀錄，就用嗰場做最新下場
+                upcoming_match = str(df_bets_active.iloc[0]['場次']).strip()
+            else:
+                # 如果所有未完場次都完全冇人落注，就直接攞未完場次嘅第一場
+                upcoming_match = str(df_unplayed.iloc[0]['場次']).strip()
         
         # 2. 建立下一場每個人落注嘅對照字典
         next_bet_dict = {}
@@ -236,7 +245,6 @@ with tab4:
             df_next_bets = df_bets[df_bets['場次'].astype(str).str.strip() == upcoming_match]
             for _, b_row in df_next_bets.iterrows():
                 p_name = b_row['人名']
-                # 安全獲取投注盤口
                 if '盤口' in b_row:
                     b_val = str(b_row['盤口']).strip()
                 elif '投注' in b_row:
