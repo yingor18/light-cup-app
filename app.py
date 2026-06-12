@@ -212,17 +212,40 @@ with tab3:
         else:
             st.info("暫時未有手足落注紀錄。")
             # =========================================================
-  # =========================================================
-# 📊 Tab 4: 手足個人勝率統計爆破版 (完美頂格靠左版)
+# =========================================================
+# 📊 Tab 4: 手足個人勝率統計爆破版 (並列排名 + 下場心水頂格版)
 # =========================================================
 with tab4:
-    st.subheader("📊 個人勝率排行榜")
+    st.subheader("📊 手足個人勝率排行榜 (走盤不計)")
     
     if not df_bets.empty and not df_matches.empty:
-        # 合併落注紀錄同賽程表
+        # 合併落注紀錄同賽程表 (計勝率用)
         df_merged_stats = pd.merge(df_bets, df_matches, on='場次', how='inner')
         
-        # 初始化每個人嘅統計數據
+        # 1. 搵出下一場最新未開波/未填賽果嘅比賽
+        upcoming_match = ""
+        # 篩選出賽果分類空白、nan 或者是空的場次
+        df_unplayed = df_matches[df_matches['賽果分類'].isna() | (df_matches['賽果分類'].astype(str).str.strip() == '') | (df_matches['賽果分類'].astype(str).str.strip() == 'nan')]
+        if not df_unplayed.empty:
+            # 攞第一場未開嘅比賽
+            upcoming_match = str(df_unplayed.iloc[0]['場次']).strip()
+        
+        # 2. 建立下一場每個人落注嘅對照字典
+        next_bet_dict = {}
+        if upcoming_match:
+            df_next_bets = df_bets[df_bets['場次'].astype(str).str.strip() == upcoming_match]
+            for _, b_row in df_next_bets.iterrows():
+                p_name = b_row['人名']
+                # 安全獲取投注盤口
+                if '盤口' in b_row:
+                    b_val = str(b_row['盤口']).strip()
+                elif '投注' in b_row:
+                    b_val = str(b_row['投注']).strip()
+                else:
+                    b_val = "已落注"
+                next_bet_dict[p_name] = b_val
+
+        # 3. 初始化每個人嘅統計數據
         player_stats = {player: {'win_full': 0, 'win_half': 0, 'total_valid': 0} for player in all_players}
         
         for index, row in df_merged_stats.iterrows():
@@ -259,12 +282,11 @@ with tab4:
                 elif match_result == '輸半': 
                     player_stats[player_name]['win_half'] += 1
 
-        # 建立勝率 DataFrame
+        # 4. 建立勝率 DataFrame 
         stats_list = []
         for player, data in player_stats.items():
             total = data['total_valid']
             if total > 0:
-                # 贏半都當贏 1 場
                 total_wins = data['win_full'] + data['win_half']
                 win_rate = (total_wins / total) * 100
                 win_rate_str = f"{win_rate:.1f}%"
@@ -272,28 +294,35 @@ with tab4:
                 win_rate = -1.0
                 win_rate_str = "0.0% (未開齋)"
             
+            # 撈返呢個人下場買左咩
+            next_bet_display = next_bet_dict.get(player, "❌ 未落注")
+            
             stats_list.append({
                 '人名': player,
                 '總有效投注': total,
-                '注碼全中': data['win_full'],
-                '注碼中半': data['win_half'],
+                '勝出場數': data['win_full'] + data['win_half'],
                 '實際勝率': win_rate_str,
+                '下場心水': next_bet_display,
                 '_sort_rate': win_rate
             })
             
         df_stats = pd.DataFrame(stats_list)
-# 先按勝率高低排序，若勝率相同則按總投注場數多寡排序 (多啲場數頂住相同勝率更威水)
+        
+        # 根據勝率同埋總有效投注排序
         df_stats = df_stats.sort_values(by=["_sort_rate", "總有效投注"], ascending=[False, False]).reset_index(drop=True)
         
-        # 使用 min 排名法：相同勝率就並列第一，下一位直接跳第三
+        # 並列排名邏輯 (雙第一、第三)
         df_stats['勝率排名'] = df_stats['_sort_rate'].rank(method='min', ascending=False).astype(int)
         
-        # 【優化欄位】將全中同中半合併，隱藏舊欄位
-        df_stats['勝出場數'] = df_stats['注碼全中'] + df_stats['注碼中半']
+        # 處理下場心水欄位名稱變形
+        heart_col_name = f"🔥 下場心水 ({upcoming_match})" if upcoming_match else "🔥 下場心水"
+        df_stats = df_stats.rename(columns={'下場心水': heart_col_name})
         
-        # 整理出街嘅欄位
-        df_stats_display = df_stats[['勝率排名', '人名', '總有效投注', '勝出場數', '實際勝率']]
+        # 整理最終出街嘅欄位
+        df_stats_display = df_stats[['勝率排名', '人名', '總有效投注', '勝出場數', '實際勝率', heart_col_name]]
+        
         st.dataframe(df_stats_display, use_container_width=True, hide_index=True)
-        st.caption("💡 註：勝率計算公式 = (全中場數 + 中半場數) / 總有效落注場數。贏半亦當作勝出 1 場計算。未開波或走盤之場次不計。")
+        st.caption("💡 註一：勝率計算公式 = (全中場數 + 中半場數) / 總有效落注場數。贏半亦當作勝出 1 場計算。未開波或走盤之場次不計。")
+        st.caption("💡 註二：【下場心水】會顯示大家在最新一場尚未開賽/未填賽果場次的投注。如果完場填了賽果，該欄會自動切換至再下一場比賽。")
     else:
         st.info("暫時未有足夠數據計算勝率。")
