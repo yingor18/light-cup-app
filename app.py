@@ -212,81 +212,81 @@ with tab3:
         else:
             st.info("暫時未有手足落注紀錄。")
             # =========================================================
-   # =========================================================
-    # 📊 Tab 4: 手足個人勝率統計爆破版 (經空格縮排對齊修正)
-    # =========================================================
-    with tab4:
-        st.subheader("📊 手足個人勝率排行榜 (走盤不計)")
+  # =========================================================
+# 📊 Tab 4: 手足個人勝率統計爆破版 (完美頂格靠左版)
+# =========================================================
+with tab4:
+    st.subheader("📊 手足個人勝率排行榜 (走盤不計)")
+    
+    if not df_bets.empty and not df_matches.empty:
+        # 合併落注紀錄同賽程表
+        df_merged_stats = pd.merge(df_bets, df_matches, on='場次', how='inner')
         
-        if not df_bets.empty and not df_matches.empty:
-            # 合併落注紀錄同賽程表
-            df_merged_stats = pd.merge(df_bets, df_matches, on='場次', how='inner')
+        # 初始化每個人嘅統計數據
+        player_stats = {player: {'win_full': 0, 'win_half': 0, 'total_valid': 0} for player in all_players}
+        
+        for index, row in df_merged_stats.iterrows():
+            player_name = row['人名']
+            if player_name not in player_stats:
+                continue
+                
+            # 欄位安全衝突處理
+            if '盤口_x' in row:
+                user_bet = str(row['盤口_x']).strip()
+            elif '投注' in row:
+                user_bet = str(row['投注']).strip()
+            else:
+                user_bet = str(row['盤口']).strip()
+                
+            match_result = str(row['賽果分類']).strip()
             
-            # 初始化每個人嘅統計數據
-            player_stats = {player: {'win_full': 0, 'win_half': 0, 'total_valid': 0} for player in all_players}
+            # 如果管理者未填寫賽果，或者填「走盤」，就跳過唔計入勝率
+            if match_result in ['nan', '', '走盤'] or pd.isna(row['賽果分類']):
+                continue
             
-            for index, row in df_merged_stats.iterrows():
-                player_name = row['人名']
-                if player_name not in player_stats:
-                    continue
-                    
-                # 欄位安全衝突處理
-                if '盤口_x' in row:
-                    user_bet = str(row['盤口_x']).strip()
-                elif '投注' in row:
-                    user_bet = str(row['投注']).strip()
-                else:
-                    user_bet = str(row['盤口']).strip()
-                    
-                match_result = str(row['賽果分類']).strip()
-                
-                # 如果管理者未填寫賽果，或者填「走盤」，就跳過唔計入勝率
-                if match_result in ['nan', '', '走盤'] or pd.isna(row['賽果分類']):
-                    continue
-                
-                # 只要有結果，有效場數 +1
-                player_stats[player_name]['total_valid'] += 1
-                
-                # 判斷係咪贏（全贏或贏半）
-                if user_bet == '上盤':
-                    if match_result == '贏全':
-                        player_stats[player_name]['win_full'] += 1
-                    elif match_result == '贏半':
-                        player_stats[player_name]['win_half'] += 1
-                elif user_bet == '下盤':
-                    if match_result == '輸全': 
-                        player_stats[player_name]['win_full'] += 1
-                    elif match_result == '輸半': 
-                        player_stats[player_name]['win_half'] += 1
+            # 只要有結果，有效場數 +1
+            player_stats[player_name]['total_valid'] += 1
+            
+            # 判斷係咪贏（全贏或贏半）
+            if user_bet == '上盤':
+                if match_result == '贏全':
+                    player_stats[player_name]['win_full'] += 1
+                elif match_result == '贏半':
+                    player_stats[player_name]['win_half'] += 1
+            elif user_bet == '下盤':
+                if match_result == '輸全': 
+                    player_stats[player_name]['win_full'] += 1
+                elif match_result == '輸半': 
+                    player_stats[player_name]['win_half'] += 1
 
-            # 建立勝率 DataFrame
-            stats_list = []
-            for player, data in player_stats.items():
-                total = data['total_valid']
-                if total > 0:
-                    # 贏半都當贏 1 場，直接相加
-                    total_wins = data['win_full'] + data['win_half']
-                    win_rate = (total_wins / total) * 100
-                    win_rate_str = f"{win_rate:.1f}%"
-                else:
-                    win_rate = -1.0
-                    win_rate_str = "0.0% (未開齋)"
-                
-                stats_list.append({
-                    '人名': player,
-                    '總有效投注': total,
-                    '注碼全中': data['win_full'],
-                    '注碼中半': data['win_half'],
-                    '實際勝率': win_rate_str,
-                    '_sort_rate': win_rate
-                })
-                
-            df_stats = pd.DataFrame(stats_list)
-            df_stats = df_stats.sort_values(by="_sort_rate", ascending=False).reset_index(drop=True)
-            df_stats['勝率排名'] = range(1, len(df_stats) + 1)
+        # 建立勝率 DataFrame
+        stats_list = []
+        for player, data in player_stats.items():
+            total = data['total_valid']
+            if total > 0:
+                # 贏半都當贏 1 場
+                total_wins = data['win_full'] + data['win_half']
+                win_rate = (total_wins / total) * 100
+                win_rate_str = f"{win_rate:.1f}%"
+            else:
+                win_rate = -1.0
+                win_rate_str = "0.0% (未開齋)"
             
-            df_stats_display = df_stats[['勝率排名', '人名', '總有效投注', '注碼全中', '注碼中半', '實際勝率']]
-            st.dataframe(df_stats_display, use_container_width=True, hide_index=True)
-            st.caption("💡 註：勝率計算公式 = (全中場數 + 中半場數) / 總有效落注場數。贏半亦當作勝出 1 場計算。未開波或走盤之場次不計。")
-        else:
-            st.info("暫時未有足夠數據計算勝率。")
+            stats_list.append({
+                '人名': player,
+                '總有效投注': total,
+                '注碼全中': data['win_full'],
+                '注碼中半': data['win_half'],
+                '實際勝率': win_rate_str,
+                '_sort_rate': win_rate
+            })
+            
+        df_stats = pd.DataFrame(stats_list)
+        df_stats = df_stats.sort_values(by="_sort_rate", ascending=False).reset_index(drop=True)
+        df_stats['勝率排名'] = range(1, len(df_stats) + 1)
+        
+        df_stats_display = df_stats[['勝率排名', '人名', '總有效投注', '注碼全中', '注碼中半', '實際勝率']]
+        st.dataframe(df_stats_display, use_container_width=True, hide_index=True)
+        st.caption("💡 註：勝率計算公式 = (全中場數 + 中半場數) / 總有效落注場數。贏半亦當作勝出 1 場計算。未開波或走盤之場次不計。")
+    else:
+        st.info("暫時未有足夠數據計算勝率。")
