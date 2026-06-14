@@ -215,9 +215,9 @@ with tab3:
         if not df_bets.empty:
             st.subheader("📋 按場次查看手足落注")
             
-            # 1. 攞到所有有落注紀錄嘅場次清單
-all_bet_matches = df_bets['場次'].unique().tolist()
-        
+# 1. 撈到所有有落注紀錄嘅場次清單
+        all_bet_matches = df_bets['場次'].unique().tolist()
+
         # --- 🎯 智能預設：尋找最新未完/即將開波場次 ---
         default_idx = 0
         if not df_matches.empty:
@@ -233,6 +233,9 @@ all_bet_matches = df_bets['場次'].unique().tolist()
             else:
                 # 若全完場，預設停在最後一場
                 default_idx = len(all_bet_matches) - 1 if all_bet_matches else 0
+        # ---------------------------------------------
+
+        selected_view_match = st.selectbox("請選擇想查看的場次：", options=all_bet_matches, index=default_idx, key="view_match_sb")
         # ---------------------------------------------
 
         selected_view_match = st.selectbox("請選擇想查看的場次：", options=all_bet_matches, index=default_idx, key="view_match_sb")
