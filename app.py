@@ -57,13 +57,57 @@ def get_points(res):
     mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
     return mapping.get(str(res).strip(), 0)
 
-# 4. 計算排名
-if not df_bets.empty and "結果分類" in df_matches.columns:
-    merged = df_bets.merge(df_matches[['場次', '結果分類']], on='場次', how='left')
-    merged['得分'] = merged['結果分類'].apply(get_points)
-    scores = merged.groupby('人名')['得分'].sum().to_dict()
-else:
-    scores = {}
+# # 4. 計算排名（加入每兩場未投注扣 10 分機制）
+scores = {}
+if not df_bets.empty:
+    # 判斷結果欄位名稱
+    target_res_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
+    
+    # ─── 步驟 A: 先算原本有投注的得分 ───
+    merged = df_bets.merge(df_matches[['場次', target_res_col]], on='場次', how='left')
+    merged['得分'] = merged[target_res_col].apply(get_points)
+    
+    # 初始化所有玩家得分為 0
+    for player in all_players:
+        scores[player] = 0
+        
+    # 累加有投注場次的分數
+    bet_scores = merged.groupby('人名')['得分'].sum().to_dict()
+    for player, score in bet_scores.items():
+        if player in scores:
+            scores[player] = score
+
+    # ─── 步驟 B: 偵測潛水（每兩場未投注扣 10 分） ───
+    # 確保 df_matches 有開賽時間，並由舊到新排序，只對「已結算/已有結果」的場次做潛水檢查
+    df_history_matches = df_matches.copy()
+    if '開賽時間' in df_history_matches.columns:
+        df_history_matches = df_history_matches.sort_values(by='開賽時間')
+        
+    # 篩選出已經打完、有結果的比賽清單
+    played_matches = df_history_matches[
+        df_history_matches[target_res_col].notna() & 
+        (df_history_matches[target_res_col].astype(str).str.strip() != '') & 
+        (df_history_matches[target_res_col].astype(str).str.strip() != 'nan')
+    ]['場次'].astype(str).str.strip().tolist()
+
+    # 針對每個玩家順序檢查已完場次的投注狀態
+    for player in all_players:
+        missed_count = 0
+        # 撈出該玩家的所有投注場次
+        player_bets = df_bets[df_bets['人名'] == player]['場次'].astype(str).str.strip().tolist()
+        
+        # 順序檢查每一場打完的波
+        for m in played_matches:
+            if m not in player_bets:
+                missed_count += 1
+                # 每累積兩場沒賭，直接重鎚扣 10 分！
+                if missed_count == 2:
+                    scores[player] -= 10
+                    missed_count = 0  # 重新計算下一輪累積
+
+# 將計算完（扣埋分）的字典轉換回 DataFrame 產生成 Leaderboard
+leaderboard_data = [{"人名": p, "得分": s} for p, s in scores.items()]
+leaderboard = pd.DataFrame(leaderboard_data)
 
 # =========================================================
 # 🏆 終極計分與排行榜邏輯 (買錯全輸扣10分、半輸扣5分，支援負分)
