@@ -215,33 +215,26 @@ with tab3:
         if not df_bets.empty:
             st.subheader("📋 按場次查看手足落注")
             
-# 1. 撈到所有有落注紀錄嘅場次清單
-        all_bet_matches = df_bets['場次'].unique().tolist()
-
-        # --- 🎯 智能預設：尋找最新未完/即將開波場次 ---
-        default_idx = 0
-        if not df_matches.empty:
-            # 依欄位名稱篩選未完場次
-            target_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
-            df_unplayed = df_matches[df_matches[target_col].isna() | (df_matches[target_col].astype(str).str.strip() == '') | (df_matches[target_col].astype(str).str.strip() == 'nan')]
+            # 1. 撈到所有有落注紀錄嘅場次清單
+            all_bet_matches = df_bets['場次'].unique().tolist()
             
-            if not df_unplayed.empty:
-                # 攞第一場最新未完嘅場次名稱
-                latest_match = str(df_unplayed.iloc[0]['場次']).strip()
-                if latest_match in all_bet_matches:
-                    default_idx = all_bet_matches.index(latest_match)
-            else:
-                # 若全完場，預設停在最後一場
-                default_idx = len(all_bet_matches) - 1 if all_bet_matches else 0
-        # ---------------------------------------------
-
-        selected_view_match = st.selectbox("請選擇想查看的場次：", options=all_bet_matches, index=default_idx, key="view_match_sb")
-        # ---------------------------------------------
-
-        selected_view_match = st.selectbox("請選擇想查看的場次：", options=all_bet_matches, index=default_idx, key="view_match_sb")
+            # --- 🎯 智能預設：尋找最新未完/即將開波場次 ---
+            default_idx = 0
+            if not df_matches.empty:
+                target_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
+                df_unplayed = df_matches[df_matches[target_col].isna() | (df_matches[target_col].astype(str).str.strip() == '') | (df_matches[target_col].astype(str).str.strip() == 'nan')]
+                
+                if not df_unplayed.empty:
+                    latest_match = str(df_unplayed.iloc[0]['場次']).strip()
+                    if latest_match in all_bet_matches:
+                        default_idx = all_bet_matches.index(latest_match)
+                else:
+                    default_idx = len(all_bet_matches) - 1 if all_bet_matches else 0
+            # ---------------------------------------------
+            
+            selected_view_match = st.selectbox("請選擇想查看的場次：", options=all_bet_matches, index=default_idx, key="view_match_sb")
             
             # 2. 篩選出嗰場波嘅紀錄，並按盤口/投注排序
-            # 這裡會自動相容你的欄位叫「盤口」或「投注」
             bet_col = '盤口' if '盤口' in df_bets.columns else '投注'
             df_filtered_view = df_bets[df_bets['場次'] == selected_view_match].sort_values(by=bet_col)
             
@@ -250,7 +243,6 @@ with tab3:
             st.dataframe(df_display, use_container_width=True, hide_index=True)
         else:
             st.info("暫時未有手足落注紀錄。")
-            # =========================================================
 # =========================================================
 # 📊 Tab 4: 手足個人勝率統計爆破版 (精準防滯留 + 下場心水)
 # =========================================================
