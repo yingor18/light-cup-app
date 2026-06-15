@@ -77,27 +77,32 @@ if not df_bets.empty:
         if player in scores:
             scores[player] = score
 
-# ─── 步驟 B: 偵測潛水（總數直接相減法，免除排序出錯） ───
-    # 1. 撈出所有已經打完、有結果的比賽總場次
-    played_matches = df_matches[
+# ─── 步驟 B: 偵測潛水（格式無敵防呆版） ───
+    # 1. 撈出所有已經打完、有結果的比賽場次（並徹底拔除所有空格做對比）
+    played_matches_raw = df_matches[
         df_matches[target_res_col].notna() & 
         (df_matches[target_res_col].astype(str).str.strip() != '') & 
         (df_matches[target_res_col].astype(str).str.strip() != 'nan')
-    ]['場次'].astype(str).str.strip().tolist()
+    ]['場次'].astype(str).tolist()
     
-    total_played_count = len(played_matches)
+    # 這是完全沒有空格的標準答案清單
+    played_matches_clean = [m.replace(' ', '').strip() for m in played_matches_raw]
+    total_played_count = len(played_matches_clean)
 
-    # 2. 針對每個玩家，直接計算漏咗幾多場
+    # 2. 針對每個玩家，精準計算他在這幾場已完場次中，到底真正投了幾場
     for player in all_players:
-        # 撈出該玩家在「已完場次」入面實際投咗幾多場
-# 建立一個乾淨嘅臨時過濾表，確保每場波人名同場次都無空格
-        df_player_history = df_bets[df_bets['人名'] == player].copy()
-        df_player_history['乾淨場次'] = df_player_history['場次'].astype(str).str.strip()
+        # 撈出該玩家的所有落注場次
+        df_player_bets = df_bets[df_bets['人名'] == player].copy()
         
-        # 算出一共有幾多場打完嘅波佢係有落注嘅
-        player_bets_in_played = df_player_history[df_player_history['乾淨場次'].isin(played_matches)]['乾淨場次'].nunique()
-        
-        # 算出漏落注嘅總場次
+        if not df_player_bets.empty:
+            # 將玩家落注嘅場次同樣徹底拔除所有空格
+            df_player_bets['比對場次'] = df_player_bets['場次'].astype(str).str.replace(' ', '').str.strip()
+            # 算出他真正有參與到已完場次的數量
+            player_bets_in_played = df_player_bets[df_player_bets['比對場次'].isin(played_matches_clean)]['比對場次'].nunique()
+        else:
+            player_bets_in_played = 0
+            
+        # 算出這名玩家真正漏掉的場次
         total_missed = total_played_count - player_bets_in_played
         
         # 每 2 場扣 10 分 (用整除法 // 算次數)
