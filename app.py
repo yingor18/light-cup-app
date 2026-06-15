@@ -61,7 +61,7 @@ def get_points(res):
 if not df_bets.empty:
     target_res_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
     
-    # ─── 1. 算出有結果的場次 ───
+    # ─── 1. 撈出有結果的場次 ───
     played_matches_raw = df_matches[
         df_matches[target_res_col].notna() & 
         (df_matches[target_res_col].astype(str).str.strip() != '') & 
@@ -74,18 +74,18 @@ if not df_bets.empty:
     merged = df_bets.merge(df_matches[['場次', target_res_col]], on='場次', how='left')
     merged['得分'] = merged[target_res_col].apply(get_points)
     
-    # 先建立一個乾淨的基礎分數 DataFrame
+    # 建立基礎分數
     df_player_scores = merged.groupby('人名')['得分'].sum().reset_index()
-    # 確保所有名冊上的人都有在裡面（防潛水到一場都沒投的人）
+    
+    # 確保所有名冊上的人都有在內
     for p in all_players:
         p_clean = str(p).strip()
         if p_clean not in df_player_scores['人名'].astype(str).str.strip().tolist():
             df_player_scores = pd.concat([df_player_scores, pd.DataFrame([{'人名': p_clean, '得分': 0}])], ignore_index=True)
 
-    # ─── 3. 直接在 DataFrame 上無情扣分 ───
+    # ─── 3. 精准計算扣分 ───
     def calculate_penalty(player_name):
         p_str = str(player_name).strip()
-        # 撈出該玩家的所有落注，並清空場次空格
         df_p = df_bets[df_bets['人名'].astype(str).str.strip() == p_str].copy()
         if not df_p.empty:
             df_p['比對場次'] = df_p['場次'].astype(str).str.replace(' ', '').str.strip()
@@ -96,12 +96,15 @@ if not df_bets.empty:
         total_missed = total_played_count - player_bets_in_played
         return (total_missed // 2) * 10 if total_missed >= 2 else 0
 
-    # 算出每個人要扣幾多分，然後直接減去
     df_player_scores['扣分'] = df_player_scores['人名'].apply(calculate_penalty)
     df_player_scores['總得分'] = df_player_scores['得分'] - df_player_scores['扣分']
 
-    # ─── 4. 將結果倒回你原本對接的字典/變數名稱 ───
-    scores = dict(zip(df_player_scores['人名'], df_player_scores['總得分']))
+    # ─── 4. 強行封鎖變數，直接用這個結果做排行榜 ───
+    # 按總得分由高到低排序
+    leaderboard_display = df_player_scores[['人名', '總得分']].sort_values(by='總得分', ascending=False).reset_index(drop=True)
+    # 加上排名欄位
+    leaderboard_display.index = leaderboard_display.index + 1
+    leaderboard_display = leaderboard_display.reset_index().rename(columns={'index': '排名', '總得分': '得分'})
 
 # =========================================================
 # 🏆 終極計分與排行榜邏輯 (買錯全輸扣10分、半輸扣5分，支援負分)
@@ -236,8 +239,12 @@ else:
 tab1, tab2, tab3, tab4 = st.tabs(["🏆 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄", "📊 勝率統計"])
 
 with tab1:
-        st.subheader("🏆 燈閪盃排名")
-        st.dataframe(leaderboard, use_container_width=True, hide_index=True)
+    st.subheader("🏆 燈閣盃排名")
+    if not df_bets.empty:
+        # 直接使用我們上面算好、絕對乾淨的 leaderboard_display 表格！
+        st.dataframe(leaderboard_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("暫時未有排名資料。")
         
 with tab2:
     st.subheader("⚽ 比賽詳情")
