@@ -77,37 +77,31 @@ if not df_bets.empty:
         if player in scores:
             scores[player] = score
 
-    # ─── 步驟 B: 偵測潛水（每兩場未投注扣 10 分） ───
-    # 確保 df_matches 有開賽時間，並由舊到新排序，只對「已結算/已有結果」的場次做潛水檢查
-    df_history_matches = df_matches.copy()
-    if '開賽時間' in df_history_matches.columns:
-        df_history_matches = df_history_matches.sort_values(by='開賽時間')
-        
-    # 篩選出已經打完、有結果的比賽清單
-    played_matches = df_history_matches[
-        df_history_matches[target_res_col].notna() & 
-        (df_history_matches[target_res_col].astype(str).str.strip() != '') & 
-        (df_history_matches[target_res_col].astype(str).str.strip() != 'nan')
+# ─── 步驟 B: 偵測潛水（總數直接相減法，免除排序出錯） ───
+    # 1. 撈出所有已經打完、有結果的比賽總場次
+    played_matches = df_matches[
+        df_matches[target_res_col].notna() & 
+        (df_matches[target_res_col].astype(str).str.strip() != '') & 
+        (df_matches[target_res_col].astype(str).str.strip() != 'nan')
     ]['場次'].astype(str).str.strip().tolist()
+    
+    total_played_count = len(played_matches)
 
-    # 針對每個玩家順序檢查已完場次的投注狀態
+    # 2. 針對每個玩家，直接計算漏咗幾多場
     for player in all_players:
-        missed_count = 0
-        # 撈出該玩家的所有投注場次
-        player_bets = df_bets[df_bets['人名'] == player]['場次'].astype(str).str.strip().tolist()
+        # 撈出該玩家在「已完場次」入面實際投咗幾多場
+        player_bets_in_played = df_bets[
+            (df_bets['人名'] == player) & 
+            (df_bets['場次'].astype(str).str.strip().isin(played_matches))
+        ]['場次'].nunique()
         
-        # 順序檢查每一場打完的波
-        for m in played_matches:
-            if m not in player_bets:
-                missed_count += 1
-                # 每累積兩場沒賭，直接重鎚扣 10 分！
-                if missed_count == 2:
-                    scores[player] -= 10
-                    missed_count = 0  # 重新計算下一輪累積
-
-# 將計算完（扣埋分）的字典轉換回 DataFrame 產生成 Leaderboard
-leaderboard_data = [{"人名": p, "得分": s} for p, s in scores.items()]
-leaderboard = pd.DataFrame(leaderboard_data)
+        # 算出漏落注嘅總場次
+        total_missed = total_played_count - player_bets_in_played
+        
+        # 每 2 場扣 10 分 (用整除法 // 算次數)
+        if total_missed >= 2:
+            penalty_times = total_missed // 2
+            scores[player] -= (penalty_times * 10)
 
 # =========================================================
 # 🏆 終極計分與排行榜邏輯 (買錯全輸扣10分、半輸扣5分，支援負分)
