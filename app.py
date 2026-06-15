@@ -58,57 +58,50 @@ def get_points(res):
     return mapping.get(str(res).strip(), 0)
 
 # # 4. 計算排名（加入每兩場未投注扣 10 分機制）
-scores = {}
 if not df_bets.empty:
-    # 判斷結果欄位名稱
     target_res_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
     
-    # ─── 步驟 A: 先算原本有投注的得分 ───
-    merged = df_bets.merge(df_matches[['場次', target_res_col]], on='場次', how='left')
-    merged['得分'] = merged[target_res_col].apply(get_points)
-    
-    # 初始化所有玩家得分為 0
-    for player in all_players:
-        scores[player] = 0
-        
-    # 累加有投注場次的分數
-    bet_scores = merged.groupby('人名')['得分'].sum().to_dict()
-    for player, score in bet_scores.items():
-        if player in scores:
-            scores[player] = score
-
-# ─── 步驟 B: 偵測潛水（格式無敵防呆版） ───
-    # 1. 撈出所有已經打完、有結果的比賽場次（並徹底拔除所有空格做對比）
+    # ─── 1. 算出有結果的場次 ───
     played_matches_raw = df_matches[
         df_matches[target_res_col].notna() & 
         (df_matches[target_res_col].astype(str).str.strip() != '') & 
         (df_matches[target_res_col].astype(str).str.strip() != 'nan')
     ]['場次'].astype(str).tolist()
-    
-    # 這是完全沒有空格的標準答案清單
     played_matches_clean = [m.replace(' ', '').strip() for m in played_matches_raw]
     total_played_count = len(played_matches_clean)
 
-    # 2. 針對每個玩家，精準計算他在這幾場已完場次中，到底真正投了幾場
-    for player in all_players:
-        # 撈出該玩家的所有落注場次
-        df_player_bets = df_bets[df_bets['人名'] == player].copy()
-        
-        if not df_player_bets.empty:
-            # 將玩家落注嘅場次同樣徹底拔除所有空格
-            df_player_bets['比對場次'] = df_player_bets['場次'].astype(str).str.replace(' ', '').str.strip()
-            # 算出他真正有參與到已完場次的數量
-            player_bets_in_played = df_player_bets[df_player_bets['比對場次'].isin(played_matches_clean)]['比對場次'].nunique()
+    # ─── 2. 算出每個人原本有投注的總得分 ───
+    merged = df_bets.merge(df_matches[['場次', target_res_col]], on='場次', how='left')
+    merged['得分'] = merged[target_res_col].apply(get_points)
+    
+    # 先建立一個乾淨的基礎分數 DataFrame
+    df_player_scores = merged.groupby('人名')['得分'].sum().reset_index()
+    # 確保所有名冊上的人都有在裡面（防潛水到一場都沒投的人）
+    for p in all_players:
+        p_clean = str(p).strip()
+        if p_clean not in df_player_scores['人名'].astype(str).str.strip().tolist():
+            df_player_scores = pd.concat([df_player_scores, pd.DataFrame([{'人名': p_clean, '得分': 0}])], ignore_index=True)
+
+    # ─── 3. 直接在 DataFrame 上無情扣分 ───
+    def calculate_penalty(player_name):
+        p_str = str(player_name).strip()
+        # 撈出該玩家的所有落注，並清空場次空格
+        df_p = df_bets[df_bets['人名'].astype(str).str.strip() == p_str].copy()
+        if not df_p.empty:
+            df_p['比對場次'] = df_p['場次'].astype(str).str.replace(' ', '').str.strip()
+            player_bets_in_played = df_p[df_p['比對場次'].isin(played_matches_clean)]['比對場次'].nunique()
         else:
             player_bets_in_played = 0
             
-        # 算出這名玩家真正漏掉的場次
         total_missed = total_played_count - player_bets_in_played
-        
-        # 每 2 場扣 10 分 (用整除法 // 算次數)
-        if total_missed >= 2:
-            penalty_times = total_missed // 2
-            scores[player] -= (penalty_times * 10)
+        return (total_missed // 2) * 10 if total_missed >= 2 else 0
+
+    # 算出每個人要扣幾多分，然後直接減去
+    df_player_scores['扣分'] = df_player_scores['人名'].apply(calculate_penalty)
+    df_player_scores['總得分'] = df_player_scores['得分'] - df_player_scores['扣分']
+
+    # ─── 4. 將結果倒回你原本對接的字典/變數名稱 ───
+    scores = dict(zip(df_player_scores['人名'], df_player_scores['總得分']))
 
 # =========================================================
 # 🏆 終極計分與排行榜邏輯 (買錯全輸扣10分、半輸扣5分，支援負分)
