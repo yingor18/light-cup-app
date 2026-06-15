@@ -82,10 +82,11 @@ if not df_bets.empty:
     merged = df_bets_clean.merge(df_matches_clean_base[['乾淨場次', target_res_col]], on='乾淨場次', how='left')
     merged['得分'] = merged[target_res_col].apply(get_points)
     
-    # 直接用乾淨資料建立基礎分數
+    # 【核心修正】這裏 groupby 完，一定要確保人名也是乾淨的
     df_player_scores = merged.groupby('人名')['得分'].sum().reset_index()
+    df_player_scores['人名'] = df_player_scores['人名'].astype(str).str.strip()
     
-    # 確保所有名冊上的人都有在內（防止完全沒投過任何一場的人漏掉）
+    # 確保所有名冊上的人都有在內
     all_players_clean = [str(p).strip() for p in all_players]
     for p_clean in all_players_clean:
         if p_clean not in df_player_scores['人名'].tolist():
@@ -97,7 +98,7 @@ if not df_bets.empty:
         df_p = df_bets_clean[df_bets_clean['人名'] == p_str]
         
         if not df_p.empty:
-            # 算出玩家在已完場次中真正投了幾場
+            # 算出玩家在已完場次中真正填了幾場紀錄
             player_bets_in_played = df_p[df_p['乾淨場次'].isin(played_matches_clean)]['乾淨場次'].nunique()
         else:
             player_bets_in_played = 0
@@ -108,8 +109,7 @@ if not df_bets.empty:
     df_player_scores['扣分'] = df_player_scores['人名'].apply(calculate_penalty)
     df_player_scores['總得分'] = df_player_scores['得分'] - df_player_scores['扣分']
 
-    # ─── 4. 一口氣產生最終的排行榜變數，不留後患 ───
-    # 這裡我們直接覆蓋 leaderboard，並按「總得分」重新進行由高到低的排序
+    # ─── 4. 一口氣產生最終的排行榜變數 ───
     leaderboard = df_player_scores[['人名', '總得分']].sort_values(by='總得分', ascending=False).reset_index(drop=True)
     leaderboard.index = leaderboard.index + 1
     leaderboard = leaderboard.reset_index().rename(columns={'index': '排名', '總得分': '得分'})
