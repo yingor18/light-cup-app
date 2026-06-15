@@ -57,11 +57,11 @@ def get_points(res):
     mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
     return mapping.get(str(res).strip(), 0)
 
-# # 4. 計算排名（格式全清理、防呆一體化版）
+# # 4. 計算排名（DEBUG 欄位全開版）
 if not df_bets.empty:
     target_res_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
     
-    # ─── 0. 複製並徹底清理所有基礎資料的空格 ───
+    # 徹底清理空格
     df_bets_clean = df_bets.copy()
     df_bets_clean['人名'] = df_bets_clean['人名'].astype(str).str.strip()
     df_bets_clean['乾淨場次'] = df_bets_clean['場次'].astype(str).str.replace(' ', '').str.strip()
@@ -69,7 +69,7 @@ if not df_bets.empty:
     df_matches_clean_base = df_matches.copy()
     df_matches_clean_base['乾淨場次'] = df_matches_clean_base['場次'].astype(str).str.replace(' ', '').str.strip()
 
-    # ─── 1. 撈出有結果的場次 ───
+    # 撈出已完場次
     played_matches_df = df_matches_clean_base[
         df_matches_clean_base[target_res_col].notna() & 
         (df_matches_clean_base[target_res_col].astype(str).str.strip() != '') & 
@@ -78,41 +78,40 @@ if not df_bets.empty:
     played_matches_clean = played_matches_df['乾淨場次'].tolist()
     total_played_count = len(played_matches_clean)
 
-    # ─── 2. 算出每個人原本有投注的總得分 ───
+    # 算基礎得分
     merged = df_bets_clean.merge(df_matches_clean_base[['乾淨場次', target_res_col]], on='乾淨場次', how='left')
     merged['得分'] = merged[target_res_col].apply(get_points)
     
-    # 【核心修正】這裏 groupby 完，一定要確保人名也是乾淨的
     df_player_scores = merged.groupby('人名')['得分'].sum().reset_index()
     df_player_scores['人名'] = df_player_scores['人名'].astype(str).str.strip()
     
-    # 確保所有名冊上的人都有在內
     all_players_clean = [str(p).strip() for p in all_players]
     for p_clean in all_players_clean:
         if p_clean not in df_player_scores['人名'].tolist():
             df_player_scores = pd.concat([df_player_scores, pd.DataFrame([{'人名': p_clean, '得分': 0}])], ignore_index=True)
 
-    # ─── 3. 精准計算潛水扣分 ───
-    def calculate_penalty(player_name):
+    # 計算潛水數據
+    def get_detailed_info(player_name):
         p_str = str(player_name).strip()
         df_p = df_bets_clean[df_bets_clean['人名'] == p_str]
         
         if not df_p.empty:
-            # 算出玩家在已完場次中真正填了幾場紀錄
             player_bets_in_played = df_p[df_p['乾淨場次'].isin(played_matches_clean)]['乾淨場次'].nunique()
         else:
             player_bets_in_played = 0
             
         total_missed = total_played_count - player_bets_in_played
-        return (total_missed // 2) * 10 if total_missed >= 2 else 0
+        penalty = (total_missed // 2) * 10 if total_missed >= 2 else 0
+        return pd.Series([total_played_count, player_bets_in_played, total_missed, penalty])
 
-    df_player_scores['扣分'] = df_player_scores['人名'].apply(calculate_penalty)
-    df_player_scores['總得分'] = df_player_scores['得分'] - df_player_scores['扣分']
+    # 把後台數據塞進欄位
+    df_player_scores[['總場數', '已投場數', '漏投場數', '潛水扣分']] = df_player_scores['人名'].apply(get_detailed_info)
+    df_player_scores['最終得分'] = df_player_scores['得分'] - df_player_scores['潛水扣分']
 
-    # ─── 4. 一口氣產生最終的排行榜變數 ───
-    leaderboard = df_player_scores[['人名', '總得分']].sort_values(by='總得分', ascending=False).reset_index(drop=True)
+    # 產生最終排行榜表格（顯示所有除錯欄位）
+    leaderboard = df_player_scores[['人名', '得分', '總場數', '已投場數', '漏投場數', '潛水扣分', '最終得分']].sort_values(by='最終得分', ascending=False).reset_index(drop=True)
     leaderboard.index = leaderboard.index + 1
-    leaderboard = leaderboard.reset_index().rename(columns={'index': '排名', '總得分': '得分'})
+    leaderboard = leaderboard.reset_index().rename(columns={'index': '排名', '得分': '基礎得分', '最終得分': '得分'})
 # =========================================================
 # 🏆 終極計分與排行榜邏輯 (買錯全輸扣10分、半輸扣5分，支援負分)
 # =========================================================
