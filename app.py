@@ -57,39 +57,48 @@ def get_points(res):
     mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
     return mapping.get(str(res).strip(), 0)
 
-# # 4. 計算排名（加入每兩場未投注扣 10 分機制）
+# # 4. 計算排名（格式全清理、防呆合體版）
 if not df_bets.empty:
     target_res_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
     
+    # ─── 0. 複製並徹底清理所有基礎資料的空格 ───
+    df_bets_clean = df_bets.copy()
+    df_bets_clean['人名'] = df_bets_clean['人名'].astype(str).str.strip()
+    df_bets_clean['乾淨場次'] = df_bets_clean['場次'].astype(str).str.replace(' ', '').str.strip()
+    
+    df_matches_clean_base = df_matches.copy()
+    df_matches_clean_base['乾淨場次'] = df_matches_clean_base['場次'].astype(str).str.replace(' ', '').str.strip()
+
     # ─── 1. 撈出有結果的場次 ───
-    played_matches_raw = df_matches[
-        df_matches[target_res_col].notna() & 
-        (df_matches[target_res_col].astype(str).str.strip() != '') & 
-        (df_matches[target_res_col].astype(str).str.strip() != 'nan')
-    ]['場次'].astype(str).tolist()
-    played_matches_clean = [m.replace(' ', '').strip() for m in played_matches_raw]
+    played_matches_df = df_matches_clean_base[
+        df_matches_clean_base[target_res_col].notna() & 
+        (df_matches_clean_base[target_res_col].astype(str).str.strip() != '') & 
+        (df_matches_clean_base[target_res_col].astype(str).str.strip() != 'nan')
+    ]
+    played_matches_clean = played_matches_df['乾淨場次'].tolist()
     total_played_count = len(played_matches_clean)
 
-    # ─── 2. 算出每個人原本有投注的總得分 ───
-    merged = df_bets.merge(df_matches[['場次', target_res_col]], on='場次', how='left')
+    # ─── 2. 算出每個人原本有投注的總得分（用乾淨場次進行 merge） ───
+    merged = df_bets_clean.merge(df_matches_clean_base[['乾淨場次', target_res_col]], on='乾淨場次', how='left')
     merged['得分'] = merged[target_res_col].apply(get_points)
     
-    # 建立基礎分數
+    # 建立基礎分數 DataFrame
     df_player_scores = merged.groupby('人名')['得分'].sum().reset_index()
     
-    # 確保所有名冊上的人都有在內
-    for p in all_players:
-        p_clean = str(p).strip()
-        if p_clean not in df_player_scores['人名'].astype(str).str.strip().tolist():
+    # 確保所有名冊上的人都有在內（同樣清理名冊人名空格）
+    all_players_clean = [str(p).strip() for p in all_players]
+    for p_clean in all_players_clean:
+        if p_clean not in df_player_scores['人名'].tolist():
             df_player_scores = pd.concat([df_player_scores, pd.DataFrame([{'人名': p_clean, '得分': 0}])], ignore_index=True)
 
     # ─── 3. 精准計算扣分 ───
     def calculate_penalty(player_name):
         p_str = str(player_name).strip()
-        df_p = df_bets[df_bets['人名'].astype(str).str.strip() == p_str].copy()
+        df_p = df_bets_clean[df_bets_clean['人名'] == p_str]
+        
         if not df_p.empty:
-            df_p['比對場次'] = df_p['場次'].astype(str).str.replace(' ', '').str.strip()
-            player_bets_in_played = df_p[df_p['比對場次'].isin(played_matches_clean)]['比對場次'].nunique()
+            # 算出他在已完場次中真正投了幾場
+            player_bets_in_played = df_p[df_p['乾淨場次'].isin(played_matches_clean)]['乾淨場次'].nunique()
         else:
             player_bets_in_played = 0
             
@@ -99,13 +108,10 @@ if not df_bets.empty:
     df_player_scores['扣分'] = df_player_scores['人名'].apply(calculate_penalty)
     df_player_scores['總得分'] = df_player_scores['得分'] - df_player_scores['扣分']
 
-    # ─── 4. 強行封鎖變數，直接用這個結果做排行榜 ───
-    # 按總得分由高到低排序
+    # ─── 4. 排序並生成排行榜 ───
     leaderboard_display = df_player_scores[['人名', '總得分']].sort_values(by='總得分', ascending=False).reset_index(drop=True)
-    # 加上排名欄位
     leaderboard_display.index = leaderboard_display.index + 1
     leaderboard_display = leaderboard_display.reset_index().rename(columns={'index': '排名', '總得分': '得分'})
-
 # =========================================================
 # 🏆 終極計分與排行榜邏輯 (買錯全輸扣10分、半輸扣5分，支援負分)
 # =========================================================
