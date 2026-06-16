@@ -452,20 +452,20 @@ with tab5:
             # 自動抓取你 Excel 裡面寫下注內容的欄位（支持「選擇」或「投注」）
             your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
             
-            # 建立乾淨的 DataFrame 供畫面前台顯示
+# 建立乾淨的 DataFrame 供畫面前台顯示（加入資料包防空值）
             final_view = pd.DataFrame()
-            final_view['對賽場次'] = player_history['場次']
-            final_view['盤口比例'] = player_history['盤口']
+            final_view['對賽場次'] = player_history['場次'].values
+            final_view['盤口比例'] = player_history['盤口'].values
             
             # 如果抓到手足投注了甚麼（上盤/下盤），立刻塞進去！
-            if your_choice_col:
-                final_view['你下注了'] = player_history[your_choice_col]
+            if your_choice_col and your_choice_col in player_history.columns:
+                final_view['你下注了'] = player_history[your_choice_col].values
             else:
-                final_view['你下注了'] = "未知欄位"
+                final_view['你下注了'] = "無投注紀錄"
                 
             # 補上賽果與分數
-            final_view['賽果'] = player_history[target_res_col].fillna("未開賽/進行中")
-            final_view['獲得分數'] = player_history['單場得分']
+            final_view['賽果'] = player_history[target_res_col].fillna("未開賽/進行中").values
+            final_view['獲得分數'] = player_history['單場得分'].values
             
             if '賽果分數' in player_history.columns:
                 final_view['全場比分'] = player_history['賽果分數']
