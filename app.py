@@ -106,9 +106,8 @@ if not unplayed.empty:
     match_row = df_matches[df_matches['場次'].astype(str).str.strip() == str(m).strip()]
     if not match_row.empty and '盤口' in match_row.columns:
         handicap_val = str(match_row.iloc[0]['盤口']).strip()
-        handicap_team = str(match_row.iloc[0]['讓球球隊']).strip() if '讓球球隊' in match_row.columns else ''
-        upper_label = f"上盤 ({handicap_team} {handicap_val})" if handicap_team else f"上盤 ({handicap_val})"
-        lower_label = f"下盤"
+        upper_label = f"上盤 ({handicap_val})"
+        lower_label = "下盤"
     else:
         upper_label = "上盤"
         lower_label = "下盤"
