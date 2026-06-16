@@ -454,30 +454,35 @@ with tab5:
             if not selected_player:
                 st.stop()
                 
+            # 1. 篩選球員數據
             player_history = merged[merged['球員'] == selected_player]
             
+            # ─── 核心安全防線：如果是空數據，直接煞車，不執行後續任何代碼 ───
             if player_history.empty:
-                st.info("此球員暫無投注紀錄。")
+                st.info(f"ℹ️ {selected_player} 暫無投注紀錄。")
                 st.stop()
                 
-            # 計算單場得分
+            # 2. 確定有數據才計算單場得分
             player_history['單場得分'] = player_history.apply(get_points, axis=1)
             
-            # ─── 4. 動態組合想顯示的欄位（智能自動偵測欄位名） ───
+            # 3. 智能自動偵測欄位名
             your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
             
-            # 智能解決 target_res_col 未定義的 NameError Bug
             res_col = None
             for col in player_history.columns:
                 if '結果分類' in col or '賽果分類' in col:
                     res_col = col
                     break
             if not res_col:
-                res_col = '結果分類' # 備用預設
+                res_col = '結果分類'
             
+            # 4. 組合要顯示的表格
             final_view = pd.DataFrame()
-            final_view['對賽場次'] = player_history['場次'].values
-            final_view['盤口比例'] = player_history['盤口'].values
+            
+            if '場次' in player_history.columns:
+                final_view['對賽場次'] = player_history['場次'].values
+            if '盤口' in player_history.columns:
+                final_view['盤口比例'] = player_history['盤口'].values
             
             if your_choice_col:
                 final_view['你下注了'] = player_history[your_choice_col].values
@@ -490,7 +495,7 @@ with tab5:
             if '賽果分數' in player_history.columns:
                 final_view['全場比分'] = player_history['賽果分數'].values
                 
-            # 根據得分直接派發 Emoji
+            # 5. 根據得分派發 Emoji
             player_scores = player_history['單場得分'].values
             cleaned_emojis = []
             for score in player_scores:
@@ -507,10 +512,8 @@ with tab5:
                 final_view['投注時間'] = player_history['時間'].values
                 final_view = final_view.sort_values(by='投注時間', ascending=False)
             
-            # ─── 5. 顯示統計卡片與表格 ───
+            # 6. 顯示統計卡片與表格
             total_bets = len(final_view)
-            
-            # 智能算已結算場數
             settled_bets = player_history[player_history[res_col].notna() & (player_history[res_col] != '')].shape[0]
             
             col1, col2 = st.columns(2)
