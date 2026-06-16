@@ -24,7 +24,8 @@ try:
     df_matches = load_data("Matches")
     df_bets = load_data("FinalBets") 
     df_players = load_data("Players")
-    all_players = df_players["人名"].dropna().astype(str).tolist()
+    # 強制轉換成純 Python List，切斷所有同 Pandas Series 嘅關聯，防爆錯
+    all_players = [str(x).strip() for x in df_players["人名"].dropna().tolist()]
     
     if df_bets.empty:
         st.warning("偵測到 FinalBets 是空的，請檢查 Tab 名稱或資料是否已成功寫入")
@@ -89,8 +90,7 @@ if not df_bets.empty:
     df_player_scores = merged.groupby('人名')['得分'].sum().reset_index()
     
     # 補足沒落注的人
-    all_players_clean = [str(p).strip() for p in all_players]
-    for p_clean in all_players_clean:
+    for p_clean in all_players:
         if p_clean not in df_player_scores['人名'].tolist():
             df_player_scores = pd.concat([df_player_scores, pd.DataFrame([{'人名': p_clean, '得分': 0}])], ignore_index=True)
 
@@ -135,7 +135,8 @@ else:
     with st.sidebar.form("bet_form", clear_on_submit=True):
         b = st.radio(radio_label, ["上盤", "下盤"])
         if st.form_submit_button("🔥 提交"):
-            if u is None:
+            # 確保 u 係一個有效嘅字串
+            if type(u) is not str or u.strip() == "":
                 st.error("⚠️ 必須先選擇名字！")
             else:
                 df_current = load_data("FinalBets")
@@ -255,7 +256,8 @@ with tab4:
         st.info("暫時未有足夠數據計算勝率。")
 
 with tab5:
-    if u:
+    # ⚠️ 終極防禦：確保 u 係一個純文字，而且唔係空嘅，絕對唔接受 Pandas 類型
+    if type(u) is str and u.strip() != "":
         st.header(f"📊 {u} 的個人數據")
         player_history = merged[merged['人名'] == u]
         
@@ -265,7 +267,7 @@ with tab5:
             final_view = pd.DataFrame()
             final_view['對賽場次'] = player_history['場次'].values
             
-            # 📌 安全讀取盤口比例（動態相容任何 merge 後的名，絕對不報 KeyError）
+            # 📌 安全讀取盤口比例
             pk_val = "未知盤口"
             for pk_col in ['盤口', '盤口_y', '盤口_x']:
                 if pk_col in player_history.columns:
