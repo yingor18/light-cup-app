@@ -54,7 +54,7 @@ sidebar_available_matches = df_sidebar_unplayed['場次'].astype(str).str.strip(
 
 # 3. 計分邏輯
 def get_points(row):
-    # 智能判斷全行還是單一數據
+    # 1. 智能安全讀取
     if hasattr(row, 'get'):
         user_choice = str(row.get('選擇', row.get('投注', ''))).strip()
         match_result = str(row.get('結果分類', row.get('賽果分類', ''))).strip()
@@ -62,27 +62,27 @@ def get_points(row):
         match_result = str(row).strip()
         user_choice = "上盤"
         
-    # 如果未開賽或進行中，直接 0 分
+    # 如果未開賽、進行中，或者空白，直接 0 分
     if match_result in ['未開賽/進行中', '未開賽', '進行中', 'None', '']:
         return 0
         
-    # ─── 新邏輯：直接對碰「投注選擇」與「開出結果」 ───
+    # ─── 模糊匹配：只要字串入面包含對應字眼就派彩 ───
     
-    # 情況 1：開出 上盤 獲勝
-    if match_result == '上盤':
-        return 10 if user_choice == '上盤' else -10
+    # 情況 1：賽果開出「上盤」全勝
+    if match_result == '上盤' or match_result == '上盤贏全':
+        return 10 if '上盤' in user_choice else -10
         
-    # 情況 2：開出 下盤 獲勝 (例如你講嘅荷蘭 vs 日本，Excel 填「下盤」，買下盤嘅藍若飛直接拿 10 分)
-    if match_result == '下盤':
-        return 10 if user_choice == '下盤' else -10
+    # 情況 2：賽果開出「下盤」全勝
+    if match_result == '下盤' or match_result == '下盤贏全':
+        return 10 if '下盤' in user_choice else -10
         
-    # 情況 3：開出 上盤贏半
-    if match_result == '上盤贏半':
-        return 5 if user_choice == '上盤' else -5
+    # 情況 3：賽果開出「上盤贏半」
+    if '上盤贏半' in match_result:
+        return 5 if '上盤' in user_choice else -5
         
-    # 情況 4：開出 下盤贏半
-    if match_result == '下盤贏半':
-        return 5 if user_choice == '下盤' else -5
+    # 情況 4：賽果開出「下盤贏半」
+    if '下盤贏半' in match_result:
+        return 5 if '下盤' in user_choice else -5
         
     # 情況 5：走盤
     if '走盤' in match_result:
