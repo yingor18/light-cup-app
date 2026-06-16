@@ -452,59 +452,62 @@ with tab4:
 
 with tab5:
             st.header(f"📊 {selected_player} 的個人數據")
-            if selected_player:
-                player_history = merged[merged['球員'] == selected_player]
+            if not selected_player:
+                st.stop()
                 
-                if not player_history.empty:
-                    # 計算單場得分
-                    player_history['單場得分'] = player_history.apply(get_points, axis=1)
-                    
-                    # ─── 4. 動態組合想顯示的欄位 ───
-                    your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
-                    
-                    final_view = pd.DataFrame()
-                    final_view['對賽場次'] = player_history['場次'].values
-                    final_view['盤口比例'] = player_history['盤口'].values
-                    
-                    if your_choice_col:
-                        final_view['你下注了'] = player_history[your_choice_col].values
-                    else:
-                        final_view['你下注了'] = "無投注紀錄"
-                        
-                    final_view['賽果分類'] = player_history[target_res_col].fillna("未開賽/進行中").values
-                    final_view['獲得分數'] = player_history['單場得分'].values
-                    
-                    if '賽果分數' in player_history.columns:
-                        final_view['全場比分'] = player_history['賽果分數'].values
-                        
-                    # 根據得分直接派發 Emoji
-                    player_scores = player_history['單場得分'].values
-                    cleaned_emojis = []
-                    for score in player_scores:
-                        if score > 0:
-                            cleaned_emojis.append('✅')
-                        elif score < 0:
-                            cleaned_emojis.append('❌')
-                        else:
-                            cleaned_emojis.append('➖')
-                    
-                    final_view['賽果'] = cleaned_emojis
-                    
-                    if '時間' in player_history.columns:
-                        final_view['投注時間'] = player_history['時間'].values
-                        final_view = final_view.sort_values(by='投注時間', ascending=False)
-                    
-                    # ─── 5. 顯示統計卡片與表格 ───
-                    total_bets = len(final_view)
-                    settled_bets = player_history[player_history[target_res_col].notna() & (player_history[target_res_col] != '')].shape[0]
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric(label="總投注場數", value=str(total_bets) + " 場")
-                    with col2:
-                        st.metric(label="已結算場數", value=str(settled_bets) + " 場")
-                        
-                    st.write(f"### 📋 {selected_player} 的詳細投注清單")
-                    st.dataframe(final_view, use_container_width=True, hide_index=True)
+            player_history = merged[merged['球員'] == selected_player]
+            
+            if player_history.empty:
+                st.info("此球員暫無投注紀錄。")
+                st.stop()
+                
+            # 計算單場得分
+            player_history['單場得分'] = player_history.apply(get_points, axis=1)
+            
+            # ─── 4. 動態組合想顯示的欄位 ───
+            your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
+            
+            final_view = pd.DataFrame()
+            final_view['對賽場次'] = player_history['場次'].values
+            final_view['盤口比例'] = player_history['盤口'].values
+            
+            if your_choice_col:
+                final_view['你下注了'] = player_history[your_choice_col].values
+            else:
+                final_view['你下注了'] = "無投注紀錄"
+                
+            final_view['賽果分類'] = player_history[target_res_col].fillna("未開賽/進行中").values
+            final_view['獲得分數'] = player_history['單場得分'].values
+            
+            if '賽果分數' in player_history.columns:
+                final_view['全場比分'] = player_history['賽果分數'].values
+                
+            # 根據得分直接派發 Emoji
+            player_scores = player_history['單場得分'].values
+            cleaned_emojis = []
+            for score in player_scores:
+                if score > 0:
+                    cleaned_emojis.append('✅')
+                elif score < 0:
+                    cleaned_emojis.append('❌')
                 else:
-                    st.info("此球員暫無投注紀錄。")
+                    cleaned_emojis.append('➖')
+            
+            final_view['賽果'] = cleaned_emojis
+            
+            if '時間' in player_history.columns:
+                final_view['投注時間'] = player_history['時間'].values
+                final_view = final_view.sort_values(by='投注時間', ascending=False)
+            
+            # ─── 5. 顯示統計卡片與表格 ───
+            total_bets = len(final_view)
+            settled_bets = player_history[player_history[target_res_col].notna() & (player_history[target_res_col] != '')].shape[0]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(label="總投注場數", value=str(total_bets) + " 場")
+            with col2:
+                st.metric(label="已結算場數", value=str(settled_bets) + " 場")
+                
+            st.write(f"### 📋 {selected_player} 的詳細投注清單")
+            st.dataframe(final_view, use_container_width=True, hide_index=True)
