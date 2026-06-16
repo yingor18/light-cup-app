@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import requests
 import urllib.parse
+import pytz
+from datetime import datetime
 
 # 設定 - 確保 SHEET_ID 係正確
 SHEET_ID = "1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0"
@@ -18,82 +20,55 @@ def load_data(sheet):
     return pd.read_csv(url)
 
 # 1. 載入資料
-# 修改這一段，確保它是讀取你確認有資料的 "FinalBets"
 try:
     df_matches = load_data("Matches")
-    # 這裡明確指向 FinalBets
     df_bets = load_data("FinalBets") 
     df_players = load_data("Players")
     all_players = df_players["人名"].dropna().astype(str).tolist()
     
-    # --- 這裡增加強制檢查 ---
     if df_bets.empty:
         st.warning("偵測到 FinalBets 是空的，請檢查 Tab 名稱或資料是否已成功寫入")
-    else:
-        st.write(f"成功讀取到 {len(df_bets)} 筆投注紀錄") # 這行可以讓你確認是否有讀到資料
-
 except Exception as e:
     st.error(f"讀取資料庫錯誤: {e}")
 
 # 2. 強制格式轉換，避免合併錯誤
 df_matches['場次'] = df_matches['場次'].astype(str).str.strip()
-# --- 📌 自動過濾 Sidebar「選擇場次」選單，完場自動消失 ---
-df_sidebar_unplayed = df_matches[
-    df_matches['結果分類'].isna() | 
-    (df_matches['結果分類'].astype(str).str.strip() == '') | 
-    (df_matches['結果分類'].astype(str).str.strip() == 'nan')
-] if '結果分類' in df_matches.columns else df_matches[
-    df_matches['賽果分類'].isna() | 
-    (df_matches['賽果分類'].astype(str).str.strip() == '') | 
-    (df_matches['賽果分類'].astype(str).str.strip() == 'nan')
-]
 
-# 提取出未完場嘅比賽清單
-sidebar_available_matches = df_sidebar_unplayed['場次'].astype(str).str.strip().tolist()
-# -------------------------------------------------------------
+# 確定賽果分類欄位名稱
+target_res_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
 
-# 3. 計分邏輯
+# 3. 計分邏輯（核心模糊匹配，防隱形空格）
 def get_points(row):
-    # 1. 智能讀取資料（防呆）
     if hasattr(row, 'get'):
-        user_choice = str(row.get('選擇', row.get('投注', ''))).strip()
+        user_choice = str(row.get('選擇', row.get('投注', row.get('盤口', '')))).strip()
         match_result = str(row.get('結果分類', row.get('賽果分類', ''))).strip()
     else:
-        match_result = str(row).strip()
-        user_choice = "上盤"
-        
-    # 如果未開賽、進行中，或者空白，直接 0 分
-    if match_result in ['未開賽/進行中', '未開賽', '進行中', 'None', '']:
         return 0
         
-    # ─── 核心模糊匹配邏輯：用 'in' 破解所有隱形空格同 Emoji ───
-    
-    # 情況 1：Excel 賽果是「上盤」贏全
+    if match_result in ['未開賽/進行中', '未開賽', '進行中', 'None', '', 'nan']:
+        return 0
+        
     if '上盤' in match_result and '贏半' not in match_result:
         return 10 if '上盤' in user_choice else -10
         
-    # 情況 2：Excel 賽果是「下盤」贏全
     if '下盤' in match_result and '贏半' not in match_result:
         return 10 if '下盤' in user_choice else -10
         
-    # 情況 3：Excel 賽果是「上盤贏半」
     if '上盤' in match_result and '贏半' in match_result:
         return 5 if '上盤' in user_choice else -5
         
-    # 情況 4：Excel 賽果是「下盤贏半」
     if '下盤' in match_result and '贏半' in match_result:
         return 5 if '下盤' in user_choice else -5
         
-    # 情況 5：走盤
     if '走盤' in match_result:
         return 0
         
     return 0
-# # 4. 計算排名（DEBUG 欄位全開版）
+
+# =========================================================
+# 🏆 核心排行榜計分區（全自動清洗與合併）
+# =========================================================
 if not df_bets.empty:
-    target_res_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
-    
-    # 徹底清理空格
     df_bets_clean = df_bets.copy()
     df_bets_clean['人名'] = df_bets_clean['人名'].astype(str).str.strip()
     df_bets_clean['乾淨場次'] = df_bets_clean['場次'].astype(str).str.replace(' ', '').str.strip()
@@ -101,167 +76,63 @@ if not df_bets.empty:
     df_matches_clean_base = df_matches.copy()
     df_matches_clean_base['乾淨場次'] = df_matches_clean_base['場次'].astype(str).str.replace(' ', '').str.strip()
 
-    # 撈出已完場次
-    played_matches_df = df_matches_clean_base[
-        df_matches_clean_base[target_res_col].notna() & 
-        (df_matches_clean_base[target_res_col].astype(str).str.strip() != '') & 
-        (df_matches_clean_base[target_res_col].astype(str).str.strip() != 'nan')
-    ]
-    played_matches_clean = played_matches_df['乾淨場次'].tolist()
-    total_played_count = len(played_matches_clean)
-
-    # 算基礎得分
-    merged = df_bets_clean.merge(df_matches_clean_base[['乾淨場次', target_res_col]], on='乾淨場次', how='left')
-    merged['得分'] = merged[target_res_col].apply(get_points)
+    # 合併並用新邏輯計分
+    merged = df_bets_clean.merge(df_matches_clean_base[['乾淨場次', target_res_col, '球隊', '讓球球隊', '盤口', '賽果分數', '時間']], on='乾淨場次', how='left')
+    merged['得分'] = merged.apply(get_points, axis=1)
     
+    # 總分統計
     df_player_scores = merged.groupby('人名')['得分'].sum().reset_index()
-    df_player_scores['人名'] = df_player_scores['人名'].astype(str).str.strip()
     
+    # 補足沒落注的人
     all_players_clean = [str(p).strip() for p in all_players]
     for p_clean in all_players_clean:
         if p_clean not in df_player_scores['人名'].tolist():
             df_player_scores = pd.concat([df_player_scores, pd.DataFrame([{'人名': p_clean, '得分': 0}])], ignore_index=True)
 
-    # 計算潛水數據
-    def get_detailed_info(player_name):
-        p_str = str(player_name).strip()
-        df_p = df_bets_clean[df_bets_clean['人名'] == p_str]
-        
-        if not df_p.empty:
-            player_bets_in_played = df_p[df_p['乾淨場次'].isin(played_matches_clean)]['乾淨場次'].nunique()
-        else:
-            player_bets_in_played = 0
-            
-        total_missed = total_played_count - player_bets_in_played
-        penalty = (total_missed // 2) * 10 if total_missed >= 2 else 0
-        return pd.Series([total_played_count, player_bets_in_played, total_missed, penalty])
-
-    # 把後台數據塞進欄位
-    df_player_scores[['總場數', '已投場數', '漏投場數', '潛水扣分']] = df_player_scores['人名'].apply(get_detailed_info)
-    df_player_scores['最終得分'] = df_player_scores['得分'] - df_player_scores['潛水扣分']
-
-    # 產生最終排行榜表格（顯示所有除錯欄位）
-    leaderboard = df_player_scores[['人名', '得分', '總場數', '已投場數', '漏投場數', '潛水扣分', '最終得分']].sort_values(by='最終得分', ascending=False).reset_index(drop=True)
+    # 排行榜
+    leaderboard = df_player_scores[['人名', '得分']].sort_values(by='得分', ascending=False).reset_index(drop=True)
     leaderboard.index = leaderboard.index + 1
-    leaderboard = leaderboard.reset_index().rename(columns={'index': '排名', '得分': '基礎得分', '最終得分': '得分'})
+    leaderboard = leaderboard.reset_index().rename(columns={'index': '排名'})
+
 # =========================================================
-# 🏆 終極計分與排行榜邏輯 (買錯全輸扣10分、半輸扣5分，支援負分)
+# ⚽ Sidebar 側邊欄落注表單
 # =========================================================
-
-# 由 0 分開始初始化
-player_scores = {player: 0 for player in all_players}
-
-if not df_bets.empty and not df_matches.empty:
-    # 合併落注紀錄同賽程表
-    df_merged = pd.merge(df_bets, df_matches, on='場次', how='inner')
-    
-    # 逐行檢查每個人投得對不對
-    for index, row in df_merged.iterrows():
-        player_name = row['人名']
-        
-        # 欄位安全衝突處理
-        if '盤口_x' in row:
-            user_bet = str(row['盤口_x']).strip()
-        elif '投注' in row:
-            user_bet = str(row['投注']).strip()
-        else:
-            user_bet = str(row['盤口']).strip()
-            
-        match_result = str(row['賽果分類']).strip() # 你在 Google Sheet 填的賽果
-        
-        # 預設每場增減分
-        current_score = 0
-        
-        # 【狀況一：手足落注係「上盤」】
-        if user_bet == '上盤':
-            if match_result == '贏全':
-                current_score = 10
-            elif match_result == '贏半':
-                current_score = 5
-            elif match_result == '輸半':  # 代表上盤「輸半」
-                current_score = -5
-            elif match_result == '輸全':  # 代表上盤「輸全」 -> 狠狠扣 10 分！
-                current_score = -10
-                
-        # 【狀況二：手足落注係「下盤」】
-        elif user_bet == '下盤':
-            if match_result == '輸全':    # 你打「輸全」代表下盤全贏
-                current_score = 10
-            elif match_result == '輸半':    # 你打「輸半」代表下盤贏一半
-                current_score = 5
-            elif match_result == '贏半':    # 代表上盤贏半，下盤就輸半
-                current_score = -5
-            elif match_result == '贏全':    # 代表上盤贏全，下盤就輸全 -> 狠狠扣 10 分！
-                current_score = -10
-                
-        # 將分數加進（或扣除）該手足的總分
-        if player_name in player_scores:
-            player_scores[player_name] += current_score
-
-# 將結果轉換成 DataFrame 顯示在網頁上
-leaderboard_data = [{'人名': name, '得分': score} for name, score in player_scores.items()]
-leaderboard = pd.DataFrame(leaderboard_data)
-
-# 排序並加上排名
-leaderboard = leaderboard.sort_values(by="得分", ascending=False).reset_index(drop=True)
-leaderboard['排名'] = leaderboard['得分'].rank(method='min', ascending=False).astype(int)
-leaderboard = leaderboard[['排名', '人名', '得分']]
-# --- 介面 ---
-import pytz # 記得喺 requirements.txt 加一行 pytz
-from datetime import datetime
-
-# 在 form 裡面執行邏輯
-# 確保喺呢個 with 區塊入面，所有嘢都縮排 4 個空格
-# --- 1. 先在 Form 外面處理「即時同步」嘅選單同時間 ---
 hk_tz = pytz.timezone('Asia/Hong_Kong')
-now_hk = datetime.now(hk_tz)
-
 st.sidebar.header("⚽ 手足落注")
 
-# 名字選單（放在外面，以便即時互動）
 u = st.sidebar.selectbox("選擇名字", options=all_players, index=None, placeholder="請選擇你的名字...")
 
-# 篩選掉已開波場次
-# # 篩選掉已填寫賽果的場次（完場自動消失）
-if '結果分類' in df_matches.columns:
-    df_sidebar_unplayed = df_matches[df_matches['結果分類'].isna() | (df_matches['結果分類'].astype(str).str.strip() == '') | (df_matches['結果分類'].astype(str).str.strip() == 'nan')]
-else:
-    df_sidebar_unplayed = df_matches[df_matches['賽果分類'].isna() | (df_matches['賽果分類'].astype(str).str.strip() == '') | (df_matches['賽果分類'].astype(str).str.strip() == 'nan')]
-
+df_sidebar_unplayed = df_matches[
+    df_matches[target_res_col].isna() | 
+    (df_matches[target_res_col].astype(str).str.strip() == '') | 
+    (df_matches[target_res_col].astype(str).str.strip() == 'nan')
+]
 available_matches = df_sidebar_unplayed['場次'].astype(str).str.strip().tolist()
 
 if not available_matches:
     st.sidebar.warning("🚫 全部比賽已開波，無得再落注。")
 else:
-    # 場次選單搬到 Form 外面，一轉場次網頁就會即時 Re-run 更新下面個讓球隊！
     m = st.sidebar.selectbox("選擇場次", options=available_matches)
-    
-    # 即時精準篩選當前揀緊嘅場次
     match_filter = df_matches['場次'].str.strip() == str(m).strip()
+    
     if not df_matches[match_filter].empty:
         current_match_info = df_matches[match_filter].iloc[0]
         handicap_team = str(current_match_info['讓球球隊']).strip()
     else:
         handicap_team = "未知"
 
-    # 即時動態判定平手盤
     if "平手" in handicap_team or handicap_team == "0" or handicap_team == "平":
         home_team = m.split(" vs ")[0] if " vs " in str(m) else "主隊"
         radio_label = f"盤口 (平手盤：上盤代表 {home_team})"
     else:
         radio_label = f"盤口 (讓球隊：{handicap_team})"
 
-    # --- 2. 這裡才是真正的 Form，只放需要被提交嘅數據 ---
     with st.sidebar.form("bet_form", clear_on_submit=True):
-        
         b = st.radio(radio_label, ["上盤", "下盤"])
-        
-        # 提交按鈕
         if st.form_submit_button("🔥 提交"):
             if u is None:
                 st.error("⚠️ 必須先選擇名字！")
             else:
-                # 重新讀取防止重複落注
                 df_current = load_data("FinalBets")
                 if not df_current[(df_current['人名'] == u) & (df_current['場次'] == m)].empty:
                     st.error("❌ 呢場你投過喇，唔准改！")
@@ -273,13 +144,14 @@ else:
                     else:
                         st.error("系統繁忙")
 
-# 刪除第 92 行，只留最下面呢個定義
+# =========================================================
+# 📊 頁面分頁 (Tabs) 顯示
+# =========================================================
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄", "📊 勝率統計", "📊 結果查詢"])
 
 with tab1:
-    st.subheader("🏆 燈閣盃排名")
+    st.subheader("🏆 燈閪盃排名")
     if not df_bets.empty:
-        # 直接大喇喇把上面強行做好的 leaderboard 餵進去！
         st.dataframe(leaderboard, use_container_width=True, hide_index=True)
     else:
         st.info("暫時未有排名資料。")
@@ -287,124 +159,66 @@ with tab1:
 with tab2:
     st.subheader("⚽ 比賽詳情")
     if not df_matches.empty:
-        # 挑選大家最想睇嘅欄位，並過濾掉背後計算用嘅 dt 欄位
-        display_cols = [c for c in ['場次', '讓球球隊', '盤口', '開賽時間', '賽果分數', '賽果分類'] if c in df_matches.columns]
-        df_matches_display = df_matches[display_cols]
-        st.dataframe(df_matches_display, use_container_width=True, hide_index=True)
+        display_cols = [c for c in ['場次', '讓球球隊', '盤口', '開賽時間', '賽果分數', target_res_col] if c in df_matches.columns]
+        st.dataframe(df_matches[display_cols], use_container_width=True, hide_index=True)
     else:
         st.info("暫時未有賽程資料。")
 
 with tab3:
-        if not df_bets.empty:
-            st.subheader("📋 按場次查看手足落注")
-            
-            # 1. 撈到所有有落注紀錄嘅場次清單
-            all_bet_matches = df_bets['場次'].unique().tolist()
-            
-            # --- 🎯 智能預設：尋找最新未完/即將開波場次 ---
-            default_idx = 0
-            if not df_matches.empty:
-                target_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
-                df_unplayed = df_matches[df_matches[target_col].isna() | (df_matches[target_col].astype(str).str.strip() == '') | (df_matches[target_col].astype(str).str.strip() == 'nan')]
-                
-                if not df_unplayed.empty:
-                    latest_match = str(df_unplayed.iloc[0]['場次']).strip()
-                    if latest_match in all_bet_matches:
-                        default_idx = all_bet_matches.index(latest_match)
-                else:
-                    default_idx = len(all_bet_matches) - 1 if all_bet_matches else 0
-            # ---------------------------------------------
-            
-            selected_view_match = st.selectbox("請選擇想查看的場次：", options=all_bet_matches, index=default_idx, key="view_match_sb")
-            
-            # 2. 篩選出嗰場波嘅紀錄，並按盤口/投注排序
-            bet_col = '盤口' if '盤口' in df_bets.columns else '投注'
-            df_filtered_view = df_bets[df_bets['場次'] == selected_view_match].sort_values(by=bet_col)
-            
-            # 3. 只顯示人名同投注盤口，睇得更舒服
-            df_display = df_filtered_view[['人名', bet_col]].reset_index(drop=True)
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
-        else:
-            st.info("暫時未有手足落注紀錄。")
-# =========================================================
-# 📊 Tab 4: 手足個人勝率統計爆破版 (精準防滯留 + 下場心水)
-# =========================================================
+    if not df_bets.empty:
+        st.subheader("📋 按場次查看手足落注")
+        all_bet_matches = df_bets['場次'].unique().tolist()
+        
+        default_idx = 0
+        if not df_sidebar_unplayed.empty:
+            latest_match = str(df_sidebar_unplayed.iloc[0]['場次']).strip()
+            if latest_match in all_bet_matches:
+                default_idx = all_bet_matches.index(latest_match)
+        
+        selected_view_match = st.selectbox("請選擇想查看的場次：", options=all_bet_matches, index=default_idx, key="view_match_sb")
+        bet_col = '盤口' if '盤口' in df_bets.columns else '投注'
+        df_filtered_view = df_bets[df_bets['場次'] == selected_view_match].sort_values(by=bet_col)
+        df_display = df_filtered_view[['人名', bet_col]].reset_index(drop=True)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("暫時未有手足落注紀錄。")
+
 with tab4:
     st.subheader("📊 手足個人勝率排行榜 (走盤不計)")
-    
     if not df_bets.empty and not df_matches.empty:
-        # 合併落注紀錄同賽程表 (計勝率用)
-        df_merged_stats = pd.merge(df_bets, df_matches, on='場次', how='inner')
-        
-        # 1. 【核心修正】精準搵出「真正未完場且有落注」嘅下一場比賽
         upcoming_match = ""
-        # 先篩選出所有未填賽果嘅比賽
-        df_unplayed = df_matches[df_matches['賽果分類'].isna() | (df_matches['賽果分類'].astype(str).str.strip() == '') | (df_matches['賽果分類'].astype(str).str.strip() == 'nan')]
-        
-        if not df_unplayed.empty:
-            # 去 df_bets 睇吓呢啲未完嘅場次，邊場最快有人落咗注
-            unplayed_match_list = df_unplayed['場次'].astype(str).str.strip().tolist()
+        if not df_sidebar_unplayed.empty:
+            unplayed_match_list = df_sidebar_unplayed['場次'].astype(str).str.strip().tolist()
             df_bets_active = df_bets[df_bets['場次'].astype(str).str.strip().isin(unplayed_match_list)]
-            
             if not df_bets_active.empty:
-                # 邊場有落注紀錄，就用嗰場做最新下場
                 upcoming_match = str(df_bets_active.iloc[0]['場次']).strip()
             else:
-                # 如果所有未完場次都完全冇人落注，就直接攞未完場次嘅第一場
-                upcoming_match = str(df_unplayed.iloc[0]['場次']).strip()
+                upcoming_match = str(df_sidebar_unplayed.iloc[0]['場次']).strip()
         
-        # 2. 建立下一場每個人落注嘅對照字典
         next_bet_dict = {}
         if upcoming_match:
             df_next_bets = df_bets[df_bets['場次'].astype(str).str.strip() == upcoming_match]
             for _, b_row in df_next_bets.iterrows():
                 p_name = b_row['人名']
-                if '盤口' in b_row:
-                    b_val = str(b_row['盤口']).strip()
-                elif '投注' in b_row:
-                    b_val = str(b_row['投注']).strip()
-                else:
-                    b_val = "已落注"
+                b_val = str(b_row.get('盤口', b_row.get('投注', '已落注'))).strip()
                 next_bet_dict[p_name] = b_val
 
-        # 3. 初始化每個人嘅統計數據
         player_stats = {player: {'win_full': 0, 'win_half': 0, 'total_valid': 0} for player in all_players}
         
-        for index, row in df_merged_stats.iterrows():
+        for index, row in merged.iterrows():
             player_name = row['人名']
             if player_name not in player_stats:
                 continue
-                
-            # 欄位安全衝突處理
-            if '盤口_x' in row:
-                user_bet = str(row['盤口_x']).strip()
-            elif '投注' in row:
-                user_bet = str(row['投注']).strip()
-            else:
-                user_bet = str(row['盤口']).strip()
-                
-            match_result = str(row['賽果分類']).strip()
-            
-            # 如果管理者未填寫賽果，或者填「走盤」，就跳過唔計入勝率
-            if match_result in ['nan', '', '走盤'] or pd.isna(row['賽果分類']):
+            match_result = str(row[target_res_col]).strip()
+            if match_result in ['nan', '', '走盤', '未開賽/進行中', '未開賽', '進行中']:
                 continue
             
-            # 只要有結果，有效場數 +1
             player_stats[player_name]['total_valid'] += 1
-            
-            # 判斷係咪贏（全贏或贏半）
-            if user_bet == '上盤':
-                if match_result == '贏全':
-                    player_stats[player_name]['win_full'] += 1
-                elif match_result == '贏半':
-                    player_stats[player_name]['win_half'] += 1
-            elif user_bet == '下盤':
-                if match_result == '輸全': 
-                    player_stats[player_name]['win_full'] += 1
-                elif match_result == '輸半': 
-                    player_stats[player_name]['win_half'] += 1
+            if row['得分'] == 10:
+                player_stats[player_name]['win_full'] += 1
+            elif row['得分'] == 5:
+                player_stats[player_name]['win_half'] += 1
 
-        # 4. 建立勝率 DataFrame 
         stats_list = []
         for player, data in player_stats.items():
             total = data['total_valid']
@@ -416,9 +230,7 @@ with tab4:
                 win_rate = -1.0
                 win_rate_str = "0.0% (未開齋)"
             
-            # 撈返呢個人下場買左咩
             next_bet_display = next_bet_dict.get(player, "❌ 未落注")
-            
             stats_list.append({
                 '人名': player,
                 '總有效投注': total,
@@ -429,74 +241,37 @@ with tab4:
             })
             
         df_stats = pd.DataFrame(stats_list)
-        
-        # 根據勝率同埋總有效投注排序
         df_stats = df_stats.sort_values(by=["_sort_rate", "總有效投注"], ascending=[False, False]).reset_index(drop=True)
-        
-        # 並列排名邏輯 (雙第一、第三)
         df_stats['勝率排名'] = df_stats['_sort_rate'].rank(method='min', ascending=False).astype(int)
-        
-        # 處理下場心水欄位名稱變形
         heart_col_name = f"🔥 下場心水 ({upcoming_match})" if upcoming_match else "🔥 下場心水"
         df_stats = df_stats.rename(columns={'下場心水': heart_col_name})
-        
-        # 整理最終出街嘅欄位
-        df_stats_display = df_stats[['勝率排名', '人名', '總有效投注', '勝出場數', '實際勝率', heart_col_name]]
-        
-        st.dataframe(df_stats_display, use_container_width=True, hide_index=True)
-        st.caption("💡 註一：勝率計算公式 = (全中場數 + 中半場數) / 總有效落注場數。贏半亦當作勝出 1 場計算。未開波或走盤之場次不計。")
-        st.caption("💡 註二：【下場心水】會顯示大家在最新一場尚未開賽/未填賽果場次的投注。如果完場填了賽果，該欄會自動切換至再下一場比賽。")
+        st.dataframe(df_stats[['勝率排名', '人名', '總有效投注', '勝出場數', '實際勝率', heart_col_name]], use_container_width=True, hide_index=True)
     else:
         st.info("暫時未有足夠數據計算勝率。")
 
 with tab5:
-            st.header(f"📊 {selected_player} 的個人數據")
-            if not selected_player:
-                st.stop()
-                
-            # 1. 篩選球員數據
-            player_history = merged[merged['球員'] == selected_player]
-            
-            # ─── 核心安全防線：如果是空數據，直接煞車，不執行後續任何代碼 ───
-            if player_history.empty:
-                st.info(f"ℹ️ {selected_player} 暫無投注紀錄。")
-                st.stop()
-                
-            # 2. 確定有數據才計算單場得分
-            player_history['單場得分'] = player_history.apply(get_points, axis=1)
-            
-            # 3. 智能自動偵測欄位名
-            your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
-            
-            res_col = None
-            for col in player_history.columns:
-                if '結果分類' in col or '賽果分類' in col:
-                    res_col = col
-                    break
-            if not res_col:
-                res_col = '結果分類'
-            
-            # 4. 組合要顯示的表格
+    if u:
+        st.header(f"📊 {u} 的個人數據")
+        player_history = merged[merged['人名'] == u]
+        
+        if player_history.empty:
+            st.info(f"ℹ️ {u} 暫無投注紀錄。")
+        else:
             final_view = pd.DataFrame()
+            final_view['對賽場次'] = player_history['場次'].values
+            final_view['盤口比例'] = player_history['盤口_y'].fillna(player_history['盤口_x']).fillna(player_history['盤口']).values
             
-            if '場次' in player_history.columns:
-                final_view['對賽場次'] = player_history['場次'].values
-            if '盤口' in player_history.columns:
-                final_view['盤口比例'] = player_history['盤口'].values
+            # 讀取投注內容
+            your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else '盤口_x')
+            final_view['你下注了'] = player_history[your_choice_col].values
             
-            if your_choice_col:
-                final_view['你下注了'] = player_history[your_choice_col].values
-            else:
-                final_view['你下注了'] = "無投注紀錄"
-                
-            final_view['賽果分類'] = player_history[res_col].fillna("未開賽/進行中").values
-            final_view['獲得分數'] = player_history['單場得分'].values
+            final_view['賽果分類'] = player_history[target_res_col].fillna("未開賽/進行中").values
+            final_view['獲得分數'] = player_history['得分'].values
             
             if '賽果分數' in player_history.columns:
                 final_view['全場比分'] = player_history['賽果分數'].values
                 
-            # 5. 根據得分派發 Emoji
-            player_scores = player_history['單場得分'].values
+            player_scores = player_history['得分'].values
             cleaned_emojis = []
             for score in player_scores:
                 if score > 0:
@@ -505,16 +280,10 @@ with tab5:
                     cleaned_emojis.append('❌')
                 else:
                     cleaned_emojis.append('➖')
-            
             final_view['賽果'] = cleaned_emojis
             
-            if '時間' in player_history.columns:
-                final_view['投注時間'] = player_history['時間'].values
-                final_view = final_view.sort_values(by='投注時間', ascending=False)
-            
-            # 6. 顯示統計卡片與表格
             total_bets = len(final_view)
-            settled_bets = player_history[player_history[res_col].notna() & (player_history[res_col] != '')].shape[0]
+            settled_bets = player_history[player_history[target_res_col].notna() & (player_history[target_res_col].astype(str).str.strip() != '') & (player_history[target_res_col].astype(str).str.strip() != 'nan')].shape[0]
             
             col1, col2 = st.columns(2)
             with col1:
@@ -522,5 +291,8 @@ with tab5:
             with col2:
                 st.metric(label="已結算場數", value=str(settled_bets) + " 場")
                 
-            st.write(f"### 📋 {selected_player} 的詳細投注清單")
+            st.write(f"### 📋 {u} 的詳細投注清單")
             st.dataframe(final_view, use_container_width=True, hide_index=True)
+    else:
+        st.header("📊 個人數據查詢")
+        st.info("💡 請先在左側邊欄（Sidebar）選擇手足名字，即可即時查詢個人對賬單。")
