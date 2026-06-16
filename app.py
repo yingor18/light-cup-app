@@ -101,17 +101,34 @@ st.sidebar.header("⚽ 手足落注")
 u = st.sidebar.selectbox("選擇名字", options=all_players, index=None)
 if not unplayed.empty:
     m = st.sidebar.selectbox("選擇場次", options=unplayed['場次'].tolist())
+
+    # 搵到呢場嘅盤口數字
+    match_row = df_matches[df_matches['場次'].astype(str).str.strip() == str(m).strip()]
+    if not match_row.empty and '盤口' in match_row.columns:
+        handicap_val = str(match_row.iloc[0]['盤口']).strip()
+        handicap_team = str(match_row.iloc[0]['讓球球隊']).strip() if '讓球球隊' in match_row.columns else ''
+        upper_label = f"上盤 ({handicap_team} {handicap_val})" if handicap_team else f"上盤 ({handicap_val})"
+        lower_label = f"下盤"
+    else:
+        upper_label = "上盤"
+        lower_label = "下盤"
+
     with st.sidebar.form("bet_form", clear_on_submit=True):
-        b = st.radio("盤口", ["上盤", "下盤"])
-        if st.form_submit_button("提交"):
+        b_raw = st.radio("盤口", [upper_label, lower_label])
+        b = "上盤" if b_raw == upper_label else "下盤"
+        if st.form_submit_button("🔥 提交"):
             if u is None:
-                st.error("⚠️ 必須先選擇名字！")
+                st.sidebar.error("⚠️ 必須先選擇名字！")
             else:
                 df_current = load_data("FinalBets")
                 if not df_current[(df_current['人名'] == u) & (df_current['場次'] == m)].empty:
-                    st.error("❌ 呢場你投過喇，唔准改！")
+                    st.sidebar.error("❌ 呢場你投過喇，唔准改！")
                 else:
-                    requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
+                    resp = requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
+                    if resp.status_code == 200:
+                        st.sidebar.success(f"✅ 已成功下注！{u} 投 {b}")
+                    else:
+                        st.sidebar.error("系統繁忙，請重試")
                     st.rerun()
 
 # 分頁顯示
