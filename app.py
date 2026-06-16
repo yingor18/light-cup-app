@@ -488,10 +488,17 @@ with tab5:
             final_view['對賽場次'] = player_history['場次'].values
             final_view['盤口比例'] = player_history['盤口'].values
             
-            if your_choice_col:
-                final_view['你下注了'] = player_history[your_choice_col].values
-            else:
-                final_view['你下注了'] = "無下注紀錄"
+            # 根據算出來的「單場得分」直接給 Emoji，最安全
+            player_scores = player_history['單場得分'].values
+            cleaned_emojis = []
+            for score in player_scores:
+                if score > 0:
+                    cleaned_emojis.append('✅')
+                elif score < 0:
+                    cleaned_emojis.append('❌')
+                else:
+                    cleaned_emojis.append('➖')
+            final_view['賽果'] = cleaned_emojis
                 
             # 建立純 Emoji 地圖（唔要贏全、輸全等字眼）
             emoji_map = {
