@@ -480,6 +480,6 @@ with tab5:
             
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("總投注場數", f"{total_bets} 場")
+                st.metric(label="總投注場數", value=str(total_bets) + " 場")
             with col2:
-                st.metric("已結算場數", f"{settled_bets
+                st.metric(label="已結算場數", value=str(settled_bets) + " 場")
