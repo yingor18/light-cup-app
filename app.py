@@ -89,7 +89,6 @@ def get_points(row):
         return 0
         
     return 0
-
 # # 4. 計算排名（DEBUG 欄位全開版）
 if not df_bets.empty:
     target_res_col = '結果分類' if '結果分類' in df_matches.columns else '賽果分類'
@@ -464,8 +463,17 @@ with tab5:
             # 計算單場得分
             player_history['單場得分'] = player_history.apply(get_points, axis=1)
             
-            # ─── 4. 動態組合想顯示的欄位 ───
+            # ─── 4. 動態組合想顯示的欄位（智能自動偵測欄位名） ───
             your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
+            
+            # 智能解決 target_res_col 未定義的 NameError Bug
+            res_col = None
+            for col in player_history.columns:
+                if '結果分類' in col or '賽果分類' in col:
+                    res_col = col
+                    break
+            if not res_col:
+                res_col = '結果分類' # 備用預設
             
             final_view = pd.DataFrame()
             final_view['對賽場次'] = player_history['場次'].values
@@ -476,7 +484,7 @@ with tab5:
             else:
                 final_view['你下注了'] = "無投注紀錄"
                 
-            final_view['賽果分類'] = player_history[target_res_col].fillna("未開賽/進行中").values
+            final_view['賽果分類'] = player_history[res_col].fillna("未開賽/進行中").values
             final_view['獲得分數'] = player_history['單場得分'].values
             
             if '賽果分數' in player_history.columns:
@@ -501,7 +509,9 @@ with tab5:
             
             # ─── 5. 顯示統計卡片與表格 ───
             total_bets = len(final_view)
-            settled_bets = player_history[player_history[target_res_col].notna() & (player_history[target_res_col] != '')].shape[0]
+            
+            # 智能算已結算場數
+            settled_bets = player_history[player_history[res_col].notna() & (player_history[res_col] != '')].shape[0]
             
             col1, col2 = st.columns(2)
             with col1:
