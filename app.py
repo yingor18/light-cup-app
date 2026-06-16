@@ -452,14 +452,13 @@ with tab4:
 
 with tab5:
     st.subheader("📊 結果查詢")
-# ─── 4. 動態組合想顯示的欄位（全新直覺安全版） ───
+# ─── 4. 動態組合想顯示的欄位（縮進修正版） ───
             your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
             
             final_view = pd.DataFrame()
             final_view['對賽場次'] = player_history['場次'].values
             final_view['盤口比例'] = player_history['盤口'].values
             
-            # 直接丟入原始下注內容，不經舊地圖轉換，防止變空白
             if your_choice_col:
                 final_view['你下注了'] = player_history[your_choice_col].values
             else:
@@ -471,7 +470,6 @@ with tab5:
             if '賽果分數' in player_history.columns:
                 final_view['全場比分'] = player_history['賽果分數'].values
                 
-            # 根據得分直接派發 Emoji，分數大於 0 就 ✅，細於 0 就 ❌
             player_scores = player_history['單場得分'].values
             cleaned_emojis = []
             for score in player_scores:
@@ -481,6 +479,8 @@ with tab5:
                     cleaned_emojis.append('❌')
                 else:
                     cleaned_emojis.append('➖')
+            
+            final_view['賽果'] = cleaned_emojis
             
             final_view['賽果'] = cleaned_emojis
                 
