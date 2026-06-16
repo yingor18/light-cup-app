@@ -68,12 +68,29 @@ df_matches['乾淨場次'] = df_matches['場次'].astype(str).str.replace(' ', '
 merged = df_bets.merge(df_matches[['乾淨場次', target_res_col, '讓球球隊', '盤口']], on='乾淨場次', how='left', suffixes=('', '_match'))
 merged['得分'] = merged.apply(get_points, axis=1)
 
-# 排名邏輯（並列處理）
+# 排名邏輯（含潛水扣分）
 df_scores = merged.groupby('人名')['得分'].sum().reset_index()
 for p in all_players:
     if p not in df_scores['人名'].values:
-        df_scores = pd.concat([df_scores, pd.DataFrame([{'人名': p, '得分': 0}])])
-df_scores['排名'] = df_scores['得分'].rank(method='min', ascending=False).astype(int)
+        df_scores = pd.concat([df_scores, pd.DataFrame([{'人名': p, '得分': 0}])], ignore_index=True)
+
+# 計算潛水扣分
+played_matches = df_matches[
+    df_matches[target_res_col].notna() &
+    (df_matches[target_res_col].astype(str).str.strip() != '') &
+    (df_matches[target_res_col].astype(str).str.strip() != 'nan')
+]['乾淨場次'].tolist()
+total_played = len(played_matches)
+
+def calc_penalty(player_name):
+    p_bets = df_bets[df_bets['人名'] == str(player_name).strip()]
+    bet_count = p_bets[p_bets['乾淨場次'].isin(played_matches)]['乾淨場次'].nunique()
+    missed = total_played - bet_count
+    return (missed // 2) * 10 if missed >= 2 else 0
+
+df_scores['潛水扣分'] = df_scores['人名'].apply(calc_penalty)
+df_scores['最終得分'] = df_scores['得分'] - df_scores['潛水扣分']
+df_scores['排名'] = df_scores['最終得分'].rank(method='min', ascending=False).astype(int)
 df_scores = df_scores.sort_values('排名')
 
 # 未開波場次
@@ -102,7 +119,8 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 總積分排名", "⚽ 賽程", "�
 
 with tab1:
     st.subheader("🏆 燈閪盃排名")
-    st.dataframe(df_scores[['排名', '人名', '得分']], hide_index=True, use_container_width=True)
+    df_scores_display = df_scores[['排名', '人名', '最終得分']].rename(columns={'最終得分': '得分'})
+    st.dataframe(df_scores_display, hide_index=True, use_container_width=True)
 
 with tab2:
     st.subheader("⚽ 比賽賽程與賽果")
@@ -111,7 +129,16 @@ with tab2:
 
 with tab3:
     st.subheader("📋 手足落注紀錄")
-    sel_match = st.selectbox("查看場次", options=df_bets['場次'].unique())
+    all_bet_matches = df_bets['場次'].unique().tolist()
+    # 預設最新未完場
+    default_idx = 0
+    if not unplayed.empty:
+        latest = str(unplayed.iloc[0]['場次']).strip()
+        if latest in all_bet_matches:
+            default_idx = all_bet_matches.index(latest)
+        else:
+            default_idx = len(all_bet_matches) - 1
+    sel_match = st.selectbox("查看場次", options=all_bet_matches, index=default_idx)
     bet_col = '盤口' if '盤口' in df_bets.columns else '投注'
     st.dataframe(df_bets[df_bets['場次'] == sel_match][['人名', bet_col]], hide_index=True, use_container_width=True)
 
