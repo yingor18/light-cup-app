@@ -242,7 +242,7 @@ else:
                         st.error("系統繁忙")
 
 # 刪除第 92 行，只留最下面呢個定義
-tab1, tab2, tab3, tab4 = st.tabs(["🏆 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄", "📊 勝率統計"])
+tab1, tab2, tab3, tab4 = st.tabs(["🏆 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄", "📊 勝率統計", "📊 個人對賬單"])
 
 with tab1:
     st.subheader("🏆 燈閣盃排名")
@@ -416,3 +416,83 @@ with tab4:
         st.caption("💡 註二：【下場心水】會顯示大家在最新一場尚未開賽/未填賽果場次的投注。如果完場填了賽果，該欄會自動切換至再下一場比賽。")
     else:
         st.info("暫時未有足夠數據計算勝率。")
+
+with tab_history:  # 記得改返對應你 st.tabs 嘅變數名
+    st.subheader("📊 個人投注歷史與賽果對賬")
+    
+    if not df_bets.empty and not df_matches.empty:
+        # ─── 1. 清理空格，建立對賬專用嘅乾淨 DataFrame ───
+        df_b_clean = df_bets.copy()
+        df_b_clean['人名'] = df_b_clean['人名'].astype(str).str.strip()
+        df_b_clean['乾淨場次'] = df_b_clean['場次'].astype(str).str.replace(' ', '').str.strip()
+        
+        df_m_clean = df_matches.copy()
+        df_m_clean['乾淨場次'] = df_m_clean['場次'].astype(str).str.replace(' ', '').str.strip()
+        
+        # 動態抓取結果欄位名稱
+        target_res_col = '結果分類' if '結果分類' in df_m_clean.columns else '賽果分類'
+        
+        # ─── 2. 俾手足揀自己嘅名字 ───
+        # 攞出名冊入面所有人（清理空格版），排好序
+        unique_players = sorted(list(set([str(p).strip() for p in all_players])))
+        selected_player = st.selectbox("👤 選擇你想查詢的手足：", unique_players, key="history_player_select")
+        
+        # ─── 3. 合併投注同賽果資料 ───
+        # 只保留有需要嘅欄位，避免表格太長
+        match_cols = ['乾淨場次', '讓球球隊', '盤口', '開賽時間']
+        if '賽果分數' in df_m_clean.columns:
+            match_cols.append('賽果分數')
+        match_cols.append(target_res_col)
+        
+        # Merge
+        df_history = df_b_clean.merge(df_m_clean[match_cols], on='乾淨場次', how='left')
+        
+        # Filter 出被選中手足嘅紀錄
+        player_history = df_history[df_history['人名'] == selected_player].copy()
+        
+        if not player_history.empty:
+            # ─── 4. 計算每場得分（等大家知邊場贏邊場輸） ───
+            player_history['單場得分'] = player_history[target_res_col].apply(get_points)
+            
+            # 欄位重新排序同改名，等介面更人性化
+            display_cols = {
+                '場次': '對賽場次',
+                '盤口': '盤口比例',
+                '選擇': '你下注了',
+                '時間': '投注時間',
+                target_res_col: '賽果',
+                '單場得分': '獲得分數'
+            }
+            if '賽果分數' in player_history.columns:
+                display_cols['賽果分數'] = '全場比分'
+                
+            # 只篩選出想顯示嘅欄位
+            valid_display_cols = [c for c in display_cols.keys() if c in player_history.columns]
+            final_view = player_history[valid_display_cols].rename(columns=display_cols)
+            
+            # 將未開賽（未有賽果）嘅場次，顯示做 "未開賽/進行中"
+            if '賽果' in final_view.columns:
+                final_view['賽果'] = final_view['賽果'].fillna("未開賽/進行中")
+            
+            # 按投注時間倒序排列，最新嘅擺最上
+            if '投注時間' in final_view.columns:
+                final_view = final_view.sort_values(by='投注時間', ascending=False)
+            
+            # ─── 5. 靚靚地顯示表格（加埋統計小卡片） ───
+            # 秀出小統計
+            total_bets = len(final_view)
+            settled_bets = player_history[player_history[target_res_col].notna()].shape[0]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("總投注場數", f"{total_bets} 場")
+            with col2:
+                st.metric("已結算場數", f"{settled_bets} 場")
+                
+            st.write(f"### 📋 {selected_player} 的詳細投注清單")
+            st.dataframe(final_view, use_container_width=True, hide_index=True)
+            
+        else:
+            st.warning(f"🔍 搵唔到 {selected_player} 嘅投注紀錄。")
+    else:
+        st.info("暫時未有足夠的投注或賽程資料。")
