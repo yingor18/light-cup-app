@@ -454,15 +454,26 @@ with tab5:
             # ─── 4. 計算每場得分（等大家知邊場贏邊場輸） ───
             player_history['單場得分'] = player_history[target_res_col].apply(get_points)
             
+# 自動偵測你 Excel 裡面寫嘅欄位名係「選擇」定「投注」
+your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
+
 # 欄位重新排序同改名，等介面更人性化
 display_cols = {
     '場次': '對賽場次',
     '盤口': '盤口比例',
-    '選擇': '你下注了',
-    '時間': '投注時間',
+}
+
+# 只要搵到下注欄位，就立刻塞進去第二欄顯示！
+if your_choice_col:
+    display_cols[your_choice_col] = '你下注了'
+
+display_cols.update({
     target_res_col: '賽果',
     '單場得分': '獲得分數'
-}
+})
+
+if '賽果分數' in player_history.columns:
+    display_cols['賽果分數'] = '全場比分'
             if '賽果分數' in player_history.columns:
                 display_cols['賽果分數'] = '全場比分'
                 
