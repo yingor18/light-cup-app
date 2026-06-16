@@ -53,9 +53,32 @@ sidebar_available_matches = df_sidebar_unplayed['場次'].astype(str).str.strip(
 # -------------------------------------------------------------
 
 # 3. 計分邏輯
-def get_points(res):
-    mapping = {"贏全": 10, "贏半": 5, "走盤": 0, "輸半": -5, "輸全": -10}
-    return mapping.get(str(res).strip(), 0)
+def get_points(row):
+    # 攞返手足買咗乜同埋上盤嘅結果
+    user_choice = str(row.get('選擇', row.get('投注', ''))).strip()
+    match_result = str(row.get('結果分類', row.get('賽果分類', ''))).strip()
+    
+    # 如果未開賽或進行中，直接 0 分
+    if match_result in ['未開賽/進行中', '未開賽', '進行中', '']:
+        return 0
+        
+    # ─── 核心邏輯：以上盤（讓球方）為黃金標準 ───
+    if user_choice == '上盤':
+        if '贏全' in match_result: return 10
+        if '贏半' in match_result: return 5
+        if '輸全' in match_result: return -10
+        if '輸半' in match_result: return -5
+        if '走盤' in match_result: return 0
+        
+    elif user_choice == '下盤':
+        # 下盤手足嘅得分，同上盤完完全全相反！
+        if '贏全' in match_result: return -10  # 上盤贏全，代表下盤輸全
+        if '贏半' in match_result: return -5   # 上盤贏半，代表下盤輸半
+        if '輸全' in match_result: return 10   # 上盤輸全，代表下盤贏全！(藍若飛呢場就會變返 +10)
+        if '輸半' in match_result: return 5    # 上盤輸半，代表下盤贏半
+        if '走盤' in match_result: return 0
+        
+    return 0
 
 # # 4. 計算排名（DEBUG 欄位全開版）
 if not df_bets.empty:
