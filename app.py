@@ -106,9 +106,15 @@ if not unplayed.empty:
     match_row = df_matches[df_matches['場次'].astype(str).str.strip() == str(m).strip()]
     if not match_row.empty and '盤口' in match_row.columns:
         handicap_val = str(match_row.iloc[0]['盤口']).strip()
-        short_val = handicap_val.split('/')[0].strip() if '/' in handicap_val else handicap_val
-        upper_label = f"上盤 ({short_val})"
-        lower_label = "下盤"
+        if '/' in handicap_val:
+            parts = handicap_val.split('/')
+            upper_info = parts[0].strip()  # 例如「法國 [-1]」
+            lower_info = parts[1].strip()  # 例如「塞內加爾 [+1]」
+            upper_label = f"上盤 ({upper_info})"
+            lower_label = f"下盤 ({lower_info})"
+        else:
+            upper_label = f"上盤 ({handicap_val})"
+            lower_label = "下盤"
     else:
         upper_label = "上盤"
         lower_label = "下盤"
@@ -173,7 +179,7 @@ with tab4:
         stats.append({
             '人名': p,
             '投注場次': total,
-            '勝場': wins,
+            '贏嘅場次': wins,
             '勝率': f"{(wins/total*100):.1f}%" if total > 0 else "0%",
             '_sort': (wins/total*100) if total > 0 else 0,
             '下一場心水': next_bet[0] if len(next_bet) > 0 else "未落注"
@@ -181,7 +187,7 @@ with tab4:
     df_stats = pd.DataFrame(stats)
     df_stats['勝率排名'] = df_stats['_sort'].rank(method='min', ascending=False).astype(int)
     df_stats = df_stats.sort_values('勝率排名').reset_index(drop=True)
-    df_stats = df_stats[['勝率排名', '人名', '投注場次', '勝場', '勝率', '下一場心水']]
+    df_stats = df_stats[['勝率排名', '人名', '投注場次', '贏嘅場次', '勝率', '下一場心水']]
     st.dataframe(df_stats, hide_index=True, use_container_width=True)
 
 # =========================================================
