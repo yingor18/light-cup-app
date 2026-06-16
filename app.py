@@ -9,6 +9,7 @@ SHEET_ID = "1ZkA6GA8JXs2oCh2rNSr_4XA7HNuxBdUjeZF4y-UyBh0"
 GAS_URL = "https://script.google.com/macros/s/AKfycby5-mVhmT5qlhTj3i5S-vxNxERhxC7xQnwkJ9tlNnRRmzMRkeNoGbdWHBdJU-zuckv1Xw/exec"
 
 st.set_page_config(layout="wide", page_title="燈閪盃系統")
+st.title("🏆 世界盃 - 燈閪盃總覽")
 
 @st.cache_data(ttl=0)
 def load_data(sheet):
@@ -100,17 +101,22 @@ if not unplayed.empty:
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 總積分排名", "⚽ 賽程", "📋 下注紀錄", "📊 勝率與心水", "📈 詳細統計"])
 
 with tab1:
+    st.subheader("🏆 燈閪盃排名")
     st.dataframe(df_scores[['排名', '人名', '得分']], hide_index=True, use_container_width=True)
 
 with tab2:
-    st.dataframe(df_matches, hide_index=True)
+    st.subheader("⚽ 比賽賽程與賽果")
+    display_cols = [c for c in ['場次', '讓球球隊', '盤口', '開賽時間', '賽果分數', '賽果分類', '結果分類'] if c in df_matches.columns]
+    st.dataframe(df_matches[display_cols], hide_index=True, use_container_width=True)
 
 with tab3:
+    st.subheader("📋 手足落注紀錄")
     sel_match = st.selectbox("查看場次", options=df_bets['場次'].unique())
     bet_col = '盤口' if '盤口' in df_bets.columns else '投注'
-    st.dataframe(df_bets[df_bets['場次'] == sel_match][['人名', bet_col]], hide_index=True)
+    st.dataframe(df_bets[df_bets['場次'] == sel_match][['人名', bet_col]], hide_index=True, use_container_width=True)
 
 with tab4:
+    st.subheader("📊 勝率與下場心水")
     upcoming = unplayed['場次'].iloc[0] if not unplayed.empty else None
     stats = []
     for p in all_players:
