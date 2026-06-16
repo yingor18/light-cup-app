@@ -54,35 +54,39 @@ sidebar_available_matches = df_sidebar_unplayed['場次'].astype(str).str.strip(
 
 # 3. 計分邏輯
 def get_points(row):
-    # ─── 1. 智能判斷傳進來的是一整行 DataFrame 還是單一變數 ───
+    # 智能判斷全行還是單一數據
     if hasattr(row, 'get'):
-        # 如果是全行資料，動態抓取欄位
         user_choice = str(row.get('選擇', row.get('投注', ''))).strip()
         match_result = str(row.get('結果分類', row.get('賽果分類', ''))).strip()
     else:
-        # 如果第 106 行只傳進了賽果分類字串，我們就默認檢查該場次的投注
-        # 為了絕對安全，如果是單一字串，我們直接做基礎判斷，或者返回 0 讓主要計分留給 get_detailed_info 處理
         match_result = str(row).strip()
-        user_choice = "上盤" # 預設基準
+        user_choice = "上盤"
         
     # 如果未開賽或進行中，直接 0 分
     if match_result in ['未開賽/進行中', '未開賽', '進行中', 'None', '']:
         return 0
         
-    # ─── 2. 核心派彩邏輯：以上盤（讓球方）為黃金標準 ───
-    if user_choice == '上盤':
-        if '贏全' in match_result: return 10
-        if '贏半' in match_result: return 5
-        if '輸全' in match_result: return -10
-        if '輸半' in match_result: return -5
-        if '走盤' in match_result: return 0
+    # ─── 新邏輯：直接對碰「投注選擇」與「開出結果」 ───
+    
+    # 情況 1：開出 上盤 獲勝
+    if match_result == '上盤':
+        return 10 if user_choice == '上盤' else -10
         
-    elif user_choice == '下盤':
-        if '贏全' in match_result: return -10  # 上盤贏全 -> 下盤輸全
-        if '贏半' in match_result: return -5   # 上盤贏半 -> 下盤輸半
-        if '輸全' in match_result: return 10   # 上盤輸全 -> 下盤贏全！(藍若飛拿回 +10 分)
-        if '輸半' in match_result: return 5    # 上盤輸半 -> 下盤贏半
-        if '走盤' in match_result: return 0
+    # 情況 2：開出 下盤 獲勝 (例如你講嘅荷蘭 vs 日本，Excel 填「下盤」，買下盤嘅藍若飛直接拿 10 分)
+    if match_result == '下盤':
+        return 10 if user_choice == '下盤' else -10
+        
+    # 情況 3：開出 上盤贏半
+    if match_result == '上盤贏半':
+        return 5 if user_choice == '上盤' else -5
+        
+    # 情況 4：開出 下盤贏半
+    if match_result == '下盤贏半':
+        return 5 if user_choice == '下盤' else -5
+        
+    # 情況 5：走盤
+    if '走盤' in match_result:
+        return 0
         
     return 0
 
@@ -499,8 +503,19 @@ with tab5:
             }
             
             raw_results = player_history[target_res_col].fillna("未開賽/進行中").values
-            final_view['賽果'] = [emoji_map.get(res, res) for res in raw_results]
-            final_view['獲得分數'] = player_history['單場得分'].values
+            # 根據得分直接給手足顯示 ✅ ❌ ➖，簡單粗暴
+            player_scores = player_history['單場得分'].values
+            
+            cleaned_emojis = []
+            for score in player_scores:
+                if score > 0:
+                    cleaned_emojis.append('✅')
+                elif score < 0:
+                    cleaned_emojis.append('❌')
+                else:
+                    cleaned_emojis.append('➖')
+            
+            final_view['賽果'] = cleaned_emojis
             
             if '賽果分數' in player_history.columns:
                 final_view['全場比分'] = player_history['賽果分數'].values
