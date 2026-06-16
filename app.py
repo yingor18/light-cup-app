@@ -454,15 +454,15 @@ with tab5:
             # ─── 4. 計算每場得分（等大家知邊場贏邊場輸） ───
             player_history['單場得分'] = player_history[target_res_col].apply(get_points)
             
-            # 欄位重新排序同改名，等介面更人性化
-            display_cols = {
-                '場次': '對賽場次',
-                '盤口': '盤口比例',
-                '選擇': '你下注了',
-                '時間': '投注時間',
-                target_res_col: '賽果',
-                '單場得分': '獲得分數'
-            }
+# 欄位重新排序同改名，等介面更人性化
+display_cols = {
+    '場次': '對賽場次',
+    '盤口': '盤口比例',
+    '選擇': '你下注了',
+    '時間': '投注時間',
+    target_res_col: '賽果',
+    '單場得分': '獲得分數'
+}
             if '賽果分數' in player_history.columns:
                 display_cols['賽果分數'] = '全場比分'
                 
