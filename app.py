@@ -54,15 +54,22 @@ sidebar_available_matches = df_sidebar_unplayed['場次'].astype(str).str.strip(
 
 # 3. 計分邏輯
 def get_points(row):
-    # 攞返手足買咗乜同埋上盤嘅結果
-    user_choice = str(row.get('選擇', row.get('投注', ''))).strip()
-    match_result = str(row.get('結果分類', row.get('賽果分類', ''))).strip()
-    
+    # ─── 1. 智能判斷傳進來的是一整行 DataFrame 還是單一變數 ───
+    if hasattr(row, 'get'):
+        # 如果是全行資料，動態抓取欄位
+        user_choice = str(row.get('選擇', row.get('投注', ''))).strip()
+        match_result = str(row.get('結果分類', row.get('賽果分類', ''))).strip()
+    else:
+        # 如果第 106 行只傳進了賽果分類字串，我們就默認檢查該場次的投注
+        # 為了絕對安全，如果是單一字串，我們直接做基礎判斷，或者返回 0 讓主要計分留給 get_detailed_info 處理
+        match_result = str(row).strip()
+        user_choice = "上盤" # 預設基準
+        
     # 如果未開賽或進行中，直接 0 分
-    if match_result in ['未開賽/進行中', '未開賽', '進行中', '']:
+    if match_result in ['未開賽/進行中', '未開賽', '進行中', 'None', '']:
         return 0
         
-    # ─── 核心邏輯：以上盤（讓球方）為黃金標準 ───
+    # ─── 2. 核心派彩邏輯：以上盤（讓球方）為黃金標準 ───
     if user_choice == '上盤':
         if '贏全' in match_result: return 10
         if '贏半' in match_result: return 5
@@ -71,11 +78,10 @@ def get_points(row):
         if '走盤' in match_result: return 0
         
     elif user_choice == '下盤':
-        # 下盤手足嘅得分，同上盤完完全全相反！
-        if '贏全' in match_result: return -10  # 上盤贏全，代表下盤輸全
-        if '贏半' in match_result: return -5   # 上盤贏半，代表下盤輸半
-        if '輸全' in match_result: return 10   # 上盤輸全，代表下盤贏全！(藍若飛呢場就會變返 +10)
-        if '輸半' in match_result: return 5    # 上盤輸半，代表下盤贏半
+        if '贏全' in match_result: return -10  # 上盤贏全 -> 下盤輸全
+        if '贏半' in match_result: return -5   # 上盤贏半 -> 下盤輸半
+        if '輸全' in match_result: return 10   # 上盤輸全 -> 下盤贏全！(藍若飛拿回 +10 分)
+        if '輸半' in match_result: return 5    # 上盤輸半 -> 下盤贏半
         if '走盤' in match_result: return 0
         
     return 0
