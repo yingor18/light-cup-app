@@ -104,9 +104,17 @@ if not unplayed.empty:
 
     # 搵到呢場嘅盤口數字
     match_row = df_matches[df_matches['場次'].astype(str).str.strip() == str(m).strip()]
-    if not match_row.empty and '盤口' in match_row.columns:
+    if not match_row.empty and '讓球球隊' in match_row.columns and '盤口' in match_row.columns:
+        handicap_team = str(match_row.iloc[0]['讓球球隊']).strip()
         handicap_val = str(match_row.iloc[0]['盤口']).strip()
-        upper_label = f"上盤 ({handicap_val})"
+        # 如果盤口含 / 就只取第一部分
+        short_val = handicap_val.split('/')[0].strip() if '/' in handicap_val else handicap_val
+        upper_label = f"上盤 ({handicap_team} {short_val})"
+        lower_label = "下盤"
+    elif not match_row.empty and '盤口' in match_row.columns:
+        handicap_val = str(match_row.iloc[0]['盤口']).strip()
+        short_val = handicap_val.split('/')[0].strip() if '/' in handicap_val else handicap_val
+        upper_label = f"上盤 ({short_val})"
         lower_label = "下盤"
     else:
         upper_label = "上盤"
