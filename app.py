@@ -460,7 +460,19 @@ with tab5:
             else:
                 final_view['你下注了'] = "無投注紀錄"
                 
-            final_view['賽果'] = player_history[target_res_col].fillna("未開賽/進行中").values
+            # 建立一個賽果轉換小地圖
+            emoji_map = {
+                '贏全': '✅ 贏全',
+                '贏半': '✅ 贏半',
+                '輸全': '❌ 輸全',
+                '輸半': '❌ 輸半',
+                '走盤': '➖ 走盤'
+            }
+            # 如果你只想純粹要 ✅ ❌ ➖ 圖標，可以改用下面呢個：
+            # emoji_map = {'贏全': '✅', '贏半': '✅', '輸全': '❌', '輸半': '❌', '走盤': '➖'}
+            
+            raw_results = player_history[target_res_col].fillna("未開賽/進行中").values
+            final_view['賽果'] = [emoji_map.get(res, res) for res in raw_results]
             final_view['獲得分數'] = player_history['單場得分'].values
             
             if '賽果分數' in player_history.columns:
