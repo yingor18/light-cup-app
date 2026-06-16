@@ -40,7 +40,12 @@ target_res_col = '結果分類' if '結果分類' in df_matches.columns else '�
 # 3. 計分邏輯（核心模糊匹配，防隱形空格）
 def get_points(row):
     if hasattr(row, 'get'):
-        user_choice = str(row.get('選擇', row.get('投注', row.get('盤口', '')))).strip()
+        # 遍歷所有可能代表投注內容的欄位名
+        user_choice = ""
+        for k in ['選擇', '投注', '盤口', '盤口_x']:
+            if k in row and pd.notna(row[k]):
+                user_choice = str(row[k]).strip()
+                break
         match_result = str(row.get('結果分類', row.get('賽果分類', ''))).strip()
     else:
         return 0
@@ -259,11 +264,22 @@ with tab5:
         else:
             final_view = pd.DataFrame()
             final_view['對賽場次'] = player_history['場次'].values
-            final_view['盤口比例'] = player_history['盤口_y'].fillna(player_history['盤口_x']).fillna(player_history['盤口']).values
             
-            # 讀取投注內容
-            your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else '盤口_x')
-            final_view['你下注了'] = player_history[your_choice_col].values
+            # 📌 安全讀取盤口比例（動態相容任何 merge 後的名，絕對不報 KeyError）
+            pk_val = "未知盤口"
+            for pk_col in ['盤口', '盤口_y', '盤口_x']:
+                if pk_col in player_history.columns:
+                    pk_val = player_history[pk_col].values
+                    break
+            final_view['盤口比例'] = pk_val
+            
+            # 📌 安全讀取你下注了
+            choice_val = "無投注紀錄"
+            for choice_col in ['選擇', '投注', '盤口_x', '盤口']:
+                if choice_col in player_history.columns:
+                    choice_val = player_history[choice_col].values
+                    break
+            final_view['你下注了'] = choice_val
             
             final_view['賽果分類'] = player_history[target_res_col].fillna("未開賽/進行中").values
             final_view['獲得分數'] = player_history['得分'].values
