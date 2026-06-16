@@ -448,28 +448,26 @@ with tab5:
             # 計算單場得分
             player_history['單場得分'] = player_history[target_res_col].apply(get_points)
             
-            # ─── 4. 動態組合想顯示的欄位（防空值、防亂碼） ───
-            your_choice_col = '選擇' if '選擇' in player_history.columns else ('投注' if '投注' in player_history.columns else None)
+           # ─── 4. 動態組合想顯示的欄位（修正版：直接從原始投注表抓取欄位） ───
+            your_choice_col = '選擇' if '選擇' in df_bets.columns else ('投注' if '投注' in df_bets.columns else None)
             
             final_view = pd.DataFrame()
             final_view['對賽場次'] = player_history['場次'].values
             final_view['盤口比例'] = player_history['盤口'].values
             
-            if your_choice_col and your_choice_col in player_history.columns:
+            if your_choice_col:
                 final_view['你下注了'] = player_history[your_choice_col].values
             else:
-                final_view['你下注了'] = "無投注紀錄"
+                final_view['你下注了'] = "無下注紀錄"
                 
-            # 建立一個賽果轉換小地圖
+            # 建立純 Emoji 地圖（唔要贏全、輸全等字眼）
             emoji_map = {
-                '贏全': '✅ 贏全',
-                '贏半': '✅ 贏半',
-                '輸全': '❌ 輸全',
-                '輸半': '❌ 輸半',
-                '走盤': '➖ 走盤'
+                '贏全': '✅',
+                '贏半': '✅',
+                '輸全': '❌',
+                '輸半': '❌',
+                '走盤': '➖'
             }
-            # 如果你只想純粹要 ✅ ❌ ➖ 圖標，可以改用下面呢個：
-            # emoji_map = {'贏全': '✅', '贏半': '✅', '輸全': '❌', '輸半': '❌', '走盤': '➖'}
             
             raw_results = player_history[target_res_col].fillna("未開賽/進行中").values
             final_view['賽果'] = [emoji_map.get(res, res) for res in raw_results]
