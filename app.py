@@ -128,12 +128,17 @@ with tab4:
         next_bet = df_bets[(df_bets['人名'] == p) & (df_bets['場次'] == upcoming)][bet_col].values
         stats.append({
             '人名': p,
+            '投注場次': total,
+            '贏嘅場次': wins,
             '勝率': f"{(wins/total*100):.1f}%" if total > 0 else "0%",
+            '_sort': (wins/total*100) if total > 0 else 0,
             '下一場心水': next_bet[0] if len(next_bet) > 0 else "未落注"
         })
     df_stats = pd.DataFrame(stats)
-    df_stats['勝率排名'] = df_stats['勝率'].rank(method='min', ascending=False).astype(int)
-    st.dataframe(df_stats.sort_values('勝率排名'), hide_index=True, use_container_width=True)
+    df_stats['勝率排名'] = df_stats['_sort'].rank(method='min', ascending=False).astype(int)
+    df_stats = df_stats.sort_values('勝率排名').reset_index(drop=True)
+    df_stats = df_stats[['勝率排名', '人名', '投注場次', '贏嘅場次', '勝率', '下一場心水']]
+    st.dataframe(df_stats, hide_index=True, use_container_width=True)
 
 # =========================================================
 # 📈 Tab 5: 詳細個人統計（潛水扣分 + 完整數據）
