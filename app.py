@@ -106,10 +106,18 @@ if not unplayed.empty:
     match_row = df_matches[df_matches['場次'].astype(str).str.strip() == str(m).strip()]
     if not match_row.empty and '盤口' in match_row.columns:
         handicap_val = str(match_row.iloc[0]['盤口']).strip()
+        handicap_team = str(match_row.iloc[0].get('讓球球隊', '')).strip() if '讓球球隊' in match_row.columns else ''
         if '/' in handicap_val:
-            parts = handicap_val.split('/')
-            upper_info = parts[0].strip()  # 例如「法國 [-1]」
-            lower_info = parts[1].strip()  # 例如「塞內加爾 [+1]」
+            parts = [p.strip() for p in handicap_val.split('/')]
+            # 判斷邊part係讓球隊（含負號或0）
+            # 讓球球隊名係 handicap_team，搵佢係邊part
+            part0_team = parts[0].split('[')[0].strip() if '[' in parts[0] else parts[0].strip()
+            if handicap_team and part0_team == handicap_team:
+                upper_info = parts[0]   # 讓球隊係上盤
+                lower_info = parts[1]   # 受讓係下盤
+            else:
+                upper_info = parts[1]   # 讓球隊係第二個
+                lower_info = parts[0]
             upper_label = f"上盤 ({upper_info})"
             lower_label = f"下盤 ({lower_info})"
         else:
