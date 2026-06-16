@@ -102,27 +102,15 @@ u = st.sidebar.selectbox("選擇名字", options=all_players, index=None)
 if not unplayed.empty:
     m = st.sidebar.selectbox("選擇場次", options=unplayed['場次'].tolist())
 
-    # 搵到呢場嘅盤口數字
+    # 搵到呢場嘅讓球球隊
     match_row = df_matches[df_matches['場次'].astype(str).str.strip() == str(m).strip()]
-    if not match_row.empty and '盤口' in match_row.columns:
-        handicap_val = str(match_row.iloc[0]['盤口']).strip()
-        handicap_team = str(match_row.iloc[0].get('讓球球隊', '')).strip() if '讓球球隊' in match_row.columns else ''
-        if '/' in handicap_val:
-            parts = [p.strip() for p in handicap_val.split('/')]
-            # 判斷邊part係讓球隊（含負號或0）
-            # 讓球球隊名係 handicap_team，搵佢係邊part
-            part0_team = parts[0].split('[')[0].strip() if '[' in parts[0] else parts[0].strip()
-            if handicap_team and part0_team == handicap_team:
-                upper_info = parts[0]   # 讓球隊係上盤
-                lower_info = parts[1]   # 受讓係下盤
-            else:
-                upper_info = parts[1]   # 讓球隊係第二個
-                lower_info = parts[0]
-            upper_label = f"上盤 ({upper_info})"
-            lower_label = f"下盤 ({lower_info})"
-        else:
-            upper_label = f"上盤 ({handicap_val})"
-            lower_label = "下盤"
+    if not match_row.empty and '讓球球隊' in match_row.columns:
+        handicap_team = str(match_row.iloc[0]['讓球球隊']).strip()
+        # 受讓球隊係場次名度搵，去掉讓球隊就係受讓隊
+        teams = str(m).replace(' vs ', '|').split('|')
+        other_team = teams[1].strip() if len(teams) == 2 and teams[0].strip() == handicap_team else teams[0].strip() if len(teams) == 2 else ''
+        upper_label = f"上盤 {handicap_team}"
+        lower_label = f"下盤 {other_team}" if other_team else "下盤"
     else:
         upper_label = "上盤"
         lower_label = "下盤"
