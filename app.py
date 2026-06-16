@@ -242,7 +242,7 @@ else:
                         st.error("系統繁忙")
 
 # 刪除第 92 行，只留最下面呢個定義
-tab1, tab2, tab3, tab4 = st.tabs(["🏆 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄", "📊 勝率統計", "📊 個人對賬單"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 總積分排名", "⚽ 賽程與賽果", "📋 手足落注紀錄", "📊 勝率統計", "📊 結果查詢"])
 
 with tab1:
     st.subheader("🏆 燈閣盃排名")
@@ -417,8 +417,8 @@ with tab4:
     else:
         st.info("暫時未有足夠數據計算勝率。")
 
-with tab_history:  # 記得改返對應你 st.tabs 嘅變數名
-    st.subheader("📊 個人投注歷史與賽果對賬")
+with tab5:
+    st.subheader("📊 結果查詢")
     
     if not df_bets.empty and not df_matches.empty:
         # ─── 1. 清理空格，建立對賬專用嘅乾淨 DataFrame ───
