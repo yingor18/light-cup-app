@@ -119,10 +119,12 @@ def calc_current_streak(player_name):
     return streak
 
 streak_data = [(p, calc_current_streak(p)) for p in all_players]
-top_streak_player, top_streak_val = max(streak_data, key=lambda x: x[1]) if streak_data else ("", 0)
+max_streak_val = max((v for _, v in streak_data), default=0)
+top_streak_players = [p for p, v in streak_data if v == max_streak_val]
 
-if top_streak_val >= 2:
-    STREAK_PLACEHOLDER.markdown(f"### 🔥 {top_streak_player} 已經連中 {top_streak_val} 鋪了！")
+if max_streak_val >= 2:
+    names_str = "、".join(top_streak_players)
+    STREAK_PLACEHOLDER.markdown(f"### 🔥 {names_str} 已經連中 {max_streak_val} 鋪了！")
 
 # 未開波場次
 unplayed = df_matches[df_matches[target_res_col].isna() | (df_matches[target_res_col].astype(str).str.strip() == '') | (df_matches[target_res_col].astype(str).str.strip() == 'nan')]
