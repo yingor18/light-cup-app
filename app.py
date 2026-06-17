@@ -10,6 +10,7 @@ GAS_URL = "https://script.google.com/macros/s/AKfycby5-mVhmT5qlhTj3i5S-vxNxERhxC
 
 st.set_page_config(layout="wide", page_title="燈閪盃系統")
 st.title("🏆 世界盃 - 燈閪盃總覽")
+STREAK_PLACEHOLDER = st.empty()
 
 @st.cache_data(ttl=0)
 def load_data(sheet):
@@ -92,6 +93,36 @@ df_scores['潛水扣分'] = df_scores['人名'].apply(calc_penalty)
 df_scores['最終得分'] = df_scores['得分'] - df_scores['潛水扣分']
 df_scores['排名'] = df_scores['最終得分'].rank(method='min', ascending=False).astype(int)
 df_scores = df_scores.sort_values('排名')
+
+# =========================================================
+# 計算每個人「目前連中」場數，搵出最高嗰位
+# =========================================================
+match_order_map = {str(r).strip(): i for i, r in enumerate(df_matches['場次'].tolist())}
+
+def calc_current_streak(player_name):
+    p_data = merged[merged['人名'] == str(player_name).strip()].copy()
+    if p_data.empty:
+        return 0
+    p_data['_order'] = p_data['場次'].astype(str).str.strip().map(lambda x: match_order_map.get(x, -1))
+    # 只攞有結果（已開波、非走盤）嘅場次，跟賽程順序排
+    p_data['_result'] = p_data[target_res_col].astype(str).str.strip()
+    valid = p_data[p_data['_result'].isin(['上盤', '下盤', '上盤贏半', '下盤贏半'])].sort_values('_order')
+    if valid.empty:
+        return 0
+    # 由最後一場開始倒數，計緊接住嘅連中
+    streak = 0
+    for score in reversed(valid['得分'].tolist()):
+        if score > 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+streak_data = [(p, calc_current_streak(p)) for p in all_players]
+top_streak_player, top_streak_val = max(streak_data, key=lambda x: x[1]) if streak_data else ("", 0)
+
+if top_streak_val >= 2:
+    STREAK_PLACEHOLDER.markdown(f"### 🔥 {top_streak_player} 已經連中 {top_streak_val} 鋪了！")
 
 # 未開波場次
 unplayed = df_matches[df_matches[target_res_col].isna() | (df_matches[target_res_col].astype(str).str.strip() == '') | (df_matches[target_res_col].astype(str).str.strip() == 'nan')]
