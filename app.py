@@ -96,6 +96,14 @@ df_scores = df_scores.sort_values('排名')
 # 未開波場次
 unplayed = df_matches[df_matches[target_res_col].isna() | (df_matches[target_res_col].astype(str).str.strip() == '') | (df_matches[target_res_col].astype(str).str.strip() == 'nan')]
 
+# 顯示上次提交結果（防止 rerun 沖走提示）
+if 'bet_msg' in st.session_state:
+    msg_type, msg_text = st.session_state.pop('bet_msg')
+    if msg_type == 'success':
+        st.sidebar.success(msg_text)
+    else:
+        st.sidebar.error(msg_text)
+
 # 側邊欄落注
 st.sidebar.header("⚽ 手足落注")
 u = st.sidebar.selectbox("選擇名字", options=all_players, index=None)
@@ -120,21 +128,21 @@ if not unplayed.empty:
         b = "上盤" if b_raw == upper_label else "下盤"
         if st.form_submit_button("🔥 提交"):
             if u is None:
-                st.sidebar.error("⚠️ 必須先選擇名字！")
+                st.session_state['bet_msg'] = ('error', "⚠️ 必須先選擇名字！")
             else:
                 df_current = load_data("FinalBets")
                 if not df_current[(df_current['人名'] == u) & (df_current['場次'] == m)].empty:
-                    st.sidebar.error("❌ 呢場你投過喇，唔准改！")
+                    st.session_state['bet_msg'] = ('error', "❌ 呢場你投過喇，唔准改！")
                 else:
                     resp = requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
                     if resp.status_code == 200:
-                        st.sidebar.success(f"✅ 已成功下注！{u} 投 {b}")
+                        st.session_state['bet_msg'] = ('success', f"✅ 已成功下注！{u} 投 {b}")
                     else:
-                        st.sidebar.error("系統繁忙，請重試")
-                    st.rerun()
+                        st.session_state['bet_msg'] = ('error', "系統繁忙，請重試")
+            st.rerun()
 
 # 分頁顯示
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏆 總積分排名", "⚽ 賽程", "📋 下注紀錄", "📊 勝率與心水", "📈 詳細統計"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🏆 總積分排名", "⚽ 賽程", "📋 下注紀錄", "📊 勝率與心水", "📈 詳細統計", "✅ 賽果核對"])
 
 with tab1:
     st.subheader("🏆 燈閪盃排名")
@@ -238,3 +246,56 @@ with tab5:
         st.caption("💡 潛水扣分：每漏投2場扣10分（向下取整）")
     else:
         st.info("暫時未有足夠數據。")
+
+# =========================================================
+# ✅ Tab 6: 賽果核對
+# =========================================================
+with tab6:
+    st.subheader("✅ 賽果核對")
+    check_player = st.selectbox("選擇手足", options=all_players, key="check_player_sb")
+
+    p_data = merged[merged['人名'] == check_player].copy()
+
+    if not p_data.empty:
+        bet_col = '盤口' if '盤口' in df_bets.columns else ('投注' if '投注' in df_bets.columns else None)
+
+        def get_bet_choice(row):
+            if '盤口_x' in row:
+                return str(row['盤口_x']).strip()
+            elif '投注' in row and str(row.get('投注', '')).strip() not in ['', 'nan']:
+                return str(row['投注']).strip()
+            else:
+                return str(row.get('盤口', '')).strip()
+
+        p_data['我嘅投注'] = p_data.apply(get_bet_choice, axis=1)
+        p_data['賽果'] = p_data[target_res_col].astype(str).str.strip()
+
+        def get_check_mark(row):
+            result = row['賽果']
+            if result in ['未開賽/進行中', '未開賽', '進行中', 'None', '', 'nan']:
+                return "⏳ 未開波"
+            if result == '走盤':
+                return "➖ 走盤"
+            if row['得分'] > 0:
+                return "✅ 中"
+            elif row['得分'] < 0:
+                return "❌ 唔中"
+            else:
+                return "➖"
+
+        p_data['核對'] = p_data.apply(get_check_mark, axis=1)
+
+        # 跟賽程順序排
+        order_map = {str(r): i for i, r in enumerate(df_matches['場次'].tolist())}
+        p_data['_order'] = p_data['場次'].map(lambda x: order_map.get(str(x), 999))
+        p_data = p_data.sort_values('_order')
+
+        display_df = p_data[['場次', '我嘅投注', '賽果', '得分', '核對']].reset_index(drop=True)
+        st.dataframe(display_df, hide_index=True, use_container_width=True)
+
+        total_correct = len(p_data[p_data['得分'] > 0])
+        total_wrong = len(p_data[p_data['得分'] < 0])
+        total_valid = len(p_data[p_data['賽果'].isin(['上盤', '下盤', '上盤贏半', '下盤贏半'])])
+        st.caption(f"📌 {check_player} 共投注 {len(p_data)} 場，已開波 {total_valid} 場，中 {total_correct} 場，唔中 {total_wrong} 場")
+    else:
+        st.info(f"{check_player} 暫時未有投注紀錄。")
