@@ -126,8 +126,39 @@ if max_streak_val >= 2:
     names_str = "、".join(top_streak_players)
     STREAK_PLACEHOLDER.markdown(f"### 🔥 {names_str} 已經連中 {max_streak_val} 鋪了！")
 
-# 未開波場次
-unplayed = df_matches[df_matches[target_res_col].isna() | (df_matches[target_res_col].astype(str).str.strip() == '') | (df_matches[target_res_col].astype(str).str.strip() == 'nan')]
+# =========================================================
+# 計算每個人嘅近況走勢（W3 / L2 格式，似 NBA STRK）
+# =========================================================
+def calc_form_streak(player_name):
+    p_data = merged[merged['人名'] == str(player_name).strip()].copy()
+    if p_data.empty:
+        return "-"
+    p_data['_order'] = p_data['場次'].astype(str).str.strip().map(lambda x: match_order_map.get(x, -1))
+    p_data['_result'] = p_data[target_res_col].astype(str).str.strip()
+    valid = p_data[p_data['_result'].isin(['上盤', '下盤', '上盤贏半', '下盤贏半'])].sort_values('_order')
+    if valid.empty:
+        return "-"
+    scores = list(reversed(valid['得分'].tolist()))
+    first_sign = scores[0] > 0
+    streak = 0
+    for s in scores:
+        cur_sign = s > 0
+        if cur_sign == first_sign:
+            streak += 1
+        else:
+            break
+    return f"W{streak}" if first_sign else f"L{streak}"
+
+# 未開波場次（賽果未填 + 仍未到開賽時間）
+hk_tz = pytz.timezone('Asia/Hong_Kong')
+now_hk = pd.Timestamp.now(tz=hk_tz)
+
+unplayed = df_matches[df_matches[target_res_col].isna() | (df_matches[target_res_col].astype(str).str.strip() == '') | (df_matches[target_res_col].astype(str).str.strip() == 'nan')].copy()
+
+if '開賽時間' in unplayed.columns:
+    unplayed['_kickoff'] = pd.to_datetime(unplayed['開賽時間'], errors='coerce').dt.tz_localize(hk_tz, ambiguous='NaT', nonexistent='NaT')
+    # 只保留未到開賽時間（或解析唔到時間就照樣保留，避免因格式問題誤封鎖）
+    unplayed = unplayed[unplayed['_kickoff'].isna() | (unplayed['_kickoff'] > now_hk)]
 
 # 顯示上次提交結果（防止 rerun 沖走提示）
 if 'bet_msg' in st.session_state:
@@ -140,7 +171,9 @@ if 'bet_msg' in st.session_state:
 # 側邊欄落注
 st.sidebar.header("⚽ 手足落注")
 u = st.sidebar.selectbox("選擇名字", options=all_players, index=None)
-if not unplayed.empty:
+if unplayed.empty:
+    st.sidebar.info("🚫 全部比賽已開波或完場，無得再落注。")
+elif not unplayed.empty:
     m = st.sidebar.selectbox("選擇場次", options=unplayed['場次'].tolist())
 
     # 搵到呢場嘅讓球球隊
@@ -180,7 +213,18 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🏆 總積分排名", "⚽ 賽�
 with tab1:
     st.subheader("🏆 燈閪盃排名")
     df_scores_display = df_scores[['排名', '人名', '最終得分']].rename(columns={'最終得分': '得分'})
-    st.dataframe(df_scores_display, hide_index=True, use_container_width=True)
+    df_scores_display['走勢'] = df_scores_display['人名'].apply(calc_form_streak)
+
+    def style_streak(val):
+        if str(val).startswith('W'):
+            return 'color: #16a34a; font-weight: bold;'
+        elif str(val).startswith('L'):
+            return 'color: #dc2626; font-weight: bold;'
+        return ''
+
+    styled = df_scores_display.style.map(style_streak, subset=['走勢'])
+    st.dataframe(styled, hide_index=True, use_container_width=True)
+    st.caption("💡 走勢：W = 連勝，L = 連敗（只計已開波、非走盤場次）")
 
 with tab2:
     st.subheader("⚽ 比賽賽程與賽果")
