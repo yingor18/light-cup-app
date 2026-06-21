@@ -249,7 +249,7 @@ elif not unplayed.empty:
             st.rerun()
 
 # 分頁顯示
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🏆 總積分排名", "⚽ 賽程", "📋 下注紀錄", "📊 勝率與心水", "📈 詳細統計", "✅ 賽果核對"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🏆 總積分排名", "⚽ 賽程", "📋 下注紀錄", "📊 勝率與心水", "📈 詳細統計", "✅ 賽果核對", "📉 走勢圖"])
 
 with tab1:
     st.subheader("🏆 燈閪盃排名")
@@ -441,3 +441,50 @@ with tab6:
         st.caption(f"📌 {check_player} 共投注 {len(p_data)} 場，已開波 {total_valid} 場，中 {total_correct} 場，唔中 {total_wrong} 場")
     else:
         st.info(f"{check_player} 暫時未有投注紀錄。")
+
+# =========================================================
+# 📉 Tab 7: 累積得分走勢圖
+# =========================================================
+with tab7:
+    st.subheader("📉 燈閪盃積分走勢")
+
+    # 跟賽程順序，搵出已完場嘅場次
+    played_order = df_matches[
+        df_matches[target_res_col].notna() &
+        (df_matches[target_res_col].astype(str).str.strip() != '') &
+        (df_matches[target_res_col].astype(str).str.strip() != 'nan')
+    ]['場次'].astype(str).str.strip().tolist()
+
+    if not played_order:
+        st.info("暫時未有完場數據，未能繪製走勢圖。")
+    else:
+        # 為每個人計每場（按時序）嘅累積得分
+        trend_data = {'場次': played_order}
+        for p in all_players:
+            p_clean = str(p).strip()
+            cum_scores = []
+            running_total = 0
+            p_bets_dict = {}
+            p_data = merged[merged['人名'] == p_clean]
+            for _, r in p_data.iterrows():
+                p_bets_dict[str(r['場次']).strip()] = r['得分']
+            for match_name in played_order:
+                running_total += p_bets_dict.get(match_name, 0)
+                cum_scores.append(running_total)
+            trend_data[p] = cum_scores
+
+        df_trend = pd.DataFrame(trend_data)
+        # 用「第1場、第2場...」做X軸標籤，避免場次名太長
+        df_trend.index = [f"第{i+1}場" for i in range(len(played_order))]
+        df_trend_plot = df_trend.drop(columns=['場次'])
+
+        st.line_chart(df_trend_plot, use_container_width=True, height=450)
+
+        with st.expander("📋 查看場次對照表"):
+            ref_df = pd.DataFrame({
+                '場次編號': [f"第{i+1}場" for i in range(len(played_order))],
+                '場次名稱': played_order
+            })
+            st.dataframe(ref_df, hide_index=True, use_container_width=True)
+
+        st.caption("💡 線圖顯示每位手足喺每場開波後嘅累積得分（未計潛水扣分），方便睇返大家嘅起跌走勢。")
