@@ -63,11 +63,52 @@ def get_points(row):
 
     return 0
 
+# 每注本金（假設）
+STAKE = 100
+
+def get_payout(row):
+    if '盤口_x' in row:
+        user_bet = str(row['盤口_x']).strip()
+    elif '投注' in row and str(row.get('投注', '')).strip() not in ['', 'nan']:
+        user_bet = str(row['投注']).strip()
+    else:
+        user_bet = str(row.get('盤口', '')).strip()
+
+    match_result = str(row.get(target_res_col, '')).strip()
+
+    if match_result in ['未開賽/進行中', '未開賽', '進行中', 'None', '', 'nan', '走盤']:
+        return 0
+
+    try:
+        odds_upper = float(row.get('上盤賠率', 0)) if pd.notna(row.get('上盤賠率', None)) else 0
+        odds_lower = float(row.get('下盤賠率', 0)) if pd.notna(row.get('下盤賠率', None)) else 0
+    except (ValueError, TypeError):
+        odds_upper, odds_lower = 0, 0
+
+    user_odds = odds_upper if user_bet == '上盤' else odds_lower
+
+    # 全贏
+    if match_result == '上盤':
+        return (user_odds - 1) * STAKE if user_bet == '上盤' else -STAKE
+    if match_result == '下盤':
+        return (user_odds - 1) * STAKE if user_bet == '下盤' else -STAKE
+    # 贏半
+    if match_result == '上盤贏半':
+        return (user_odds - 1) * STAKE * 0.5 if user_bet == '上盤' else -STAKE * 0.5
+    if match_result == '下盤贏半':
+        return (user_odds - 1) * STAKE * 0.5 if user_bet == '下盤' else -STAKE * 0.5
+
+    return 0
+
 # 數據合併
 df_bets['乾淨場次'] = df_bets['場次'].astype(str).str.replace(' ', '').str.strip()
 df_matches['乾淨場次'] = df_matches['場次'].astype(str).str.replace(' ', '').str.strip()
-merged = df_bets.merge(df_matches[['乾淨場次', target_res_col, '讓球球隊', '盤口']], on='乾淨場次', how='left', suffixes=('', '_match'))
+
+odds_cols = [c for c in ['上盤賠率', '下盤賠率'] if c in df_matches.columns]
+merge_cols = ['乾淨場次', target_res_col, '讓球球隊', '盤口'] + odds_cols
+merged = df_bets.merge(df_matches[merge_cols], on='乾淨場次', how='left', suffixes=('', '_match'))
 merged['得分'] = merged.apply(get_points, axis=1)
+merged['回報'] = merged.apply(get_payout, axis=1)
 
 # 排名邏輯（含潛水扣分）
 df_scores = merged.groupby('人名')['得分'].sum().reset_index()
@@ -215,6 +256,22 @@ with tab1:
     df_scores_display = df_scores[['排名', '人名', '最終得分']].rename(columns={'最終得分': '得分'})
     df_scores_display['走勢'] = df_scores_display['人名'].apply(calc_form_streak)
 
+    # 計算回報率：每注平均回報 ÷ 本金
+    def calc_roi(player_name):
+        p_data = merged[merged['人名'] == str(player_name).strip()]
+        valid = p_data[p_data[target_res_col].astype(str).str.strip().isin(['上盤', '下盤', '上盤贏半', '下盤贏半'])]
+        if valid.empty:
+            return "-", 0
+        total_payout = valid['回報'].sum()
+        total_staked = len(valid) * STAKE
+        roi_pct = (total_payout / total_staked) * 100 if total_staked > 0 else 0
+        sign = "+" if total_payout >= 0 else ""
+        return f"{sign}{roi_pct:.1f}%", total_payout
+
+    roi_results = df_scores_display['人名'].apply(calc_roi)
+    df_scores_display['回報率'] = roi_results.apply(lambda x: x[0])
+    df_scores_display['_roi_val'] = roi_results.apply(lambda x: x[1])
+
     def style_streak(val):
         if str(val).startswith('W'):
             return 'color: #16a34a; font-weight: bold;'
@@ -222,9 +279,17 @@ with tab1:
             return 'color: #dc2626; font-weight: bold;'
         return ''
 
-    styled = df_scores_display.style.map(style_streak, subset=['走勢'])
+    def style_roi(val):
+        if str(val).startswith('+'):
+            return 'color: #16a34a; font-weight: bold;'
+        elif str(val).startswith('-'):
+            return 'color: #dc2626; font-weight: bold;'
+        return ''
+
+    display_final = df_scores_display[['排名', '人名', '得分', '走勢', '回報率']]
+    styled = display_final.style.map(style_streak, subset=['走勢']).map(style_roi, subset=['回報率'])
     st.dataframe(styled, hide_index=True, use_container_width=True)
-    st.caption("💡 走勢：W = 連勝，L = 連敗（只計已開波、非走盤場次）")
+    st.caption(f"💡 走勢：W = 連勝，L = 連敗。回報率：假設每注本金 {STAKE} 蚊，按 Google Sheet 賠率計算嘅平均盈虧百分比（只計已開波、非走盤場次）")
 
 with tab2:
     st.subheader("⚽ 比賽賽程與賽果")
