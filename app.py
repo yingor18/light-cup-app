@@ -474,8 +474,9 @@ with tab7:
             trend_data[p] = cum_scores
 
         df_trend = pd.DataFrame(trend_data)
-        # 用「第1場、第2場...」做X軸標籤，避免場次名太長
-        df_trend.index = [f"第{i+1}場" for i in range(len(played_order))]
+        # 用數字做 index（1, 2, 3...），避免 line_chart 將「第10場」當文字排序而搬亂順序
+        df_trend.index = range(1, len(played_order) + 1)
+        df_trend.index.name = "場次編號"
         df_trend_plot = df_trend.drop(columns=['場次'])
 
         selected_players = st.multiselect(
@@ -491,7 +492,7 @@ with tab7:
 
         with st.expander("📋 查看場次對照表"):
             ref_df = pd.DataFrame({
-                '場次編號': [f"第{i+1}場" for i in range(len(played_order))],
+                '場次編號': range(1, len(played_order) + 1),
                 '場次名稱': played_order
             })
             st.dataframe(ref_df, hide_index=True, use_container_width=True)
