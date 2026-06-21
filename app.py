@@ -478,6 +478,15 @@ with tab7:
         df_trend.index = [f"第{i+1}場" for i in range(len(played_order))]
         df_trend_plot = df_trend.drop(columns=['場次'])
 
+        selected_players = st.multiselect(
+            "選擇想睇嘅手足（可多選，留空 = 全部顯示）",
+            options=all_players,
+            default=[]
+        )
+
+        if selected_players:
+            df_trend_plot = df_trend_plot[selected_players]
+
         st.line_chart(df_trend_plot, use_container_width=True, height=450)
 
         with st.expander("📋 查看場次對照表"):
