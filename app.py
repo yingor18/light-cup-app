@@ -525,11 +525,46 @@ with st.sidebar.expander("👑 奪冠球隊（一次性，鎖死）", expanded=F
                     st.rerun()
 
 # 分頁顯示
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["🏆 總積分排名", "⚽ 賽程", "📋 下注紀錄", "📊 勝率與心水", "📈 詳細統計", "✅ 賽果核對", "📉 走勢圖", "🏆 淘汰賽"])
+tab_ko, tab1, tab_mix, tab6, tab7, tab2 = st.tabs(["🏆 淘汰賽", "🏆 總積分排名", "📊 小組賽詳情", "✅ 賽果核對", "📉 走勢圖", "⚽ 賽程"])
+
+with tab_ko:
+    st.subheader("🏆 淘汰賽積分排名")
+
+    if df_ko_matches.empty:
+        st.info("淘汰賽賽程未準備好。")
+    else:
+        st.dataframe(df_ko_scores[['排名', '人名', '淘汰賽得分']], hide_index=True, use_container_width=True)
+        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，唔投扣20）、半場波膽中+50、全場波膽中+30、半全場中+20、上/下半頭15分入球中各+30，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
+
+        st.divider()
+        st.subheader("⚽ 淘汰賽賽程")
+        ko_display_cols = [c for c in ['場次', '輪次', '讓球球隊', '盤口', '開賽時間', '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球'] if c in df_ko_matches.columns]
+        st.dataframe(df_ko_matches[ko_display_cols], hide_index=True, use_container_width=True)
+
+        if not df_ko_champion.empty:
+            st.divider()
+            st.subheader("👑 奪冠球隊投注紀錄")
+            champ_display_cols = [c for c in ['人名', '投注球隊'] if c in df_ko_champion.columns]
+            st.dataframe(df_ko_champion[champ_display_cols], hide_index=True, use_container_width=True)
+
+        if not df_ko_bets.empty:
+            st.divider()
+            st.subheader("📋 淘汰賽落注紀錄")
+            ko_bet_match_sel = st.selectbox("查看場次", options=df_ko_bets['場次'].unique(), key="ko_bet_view_sb")
+            ko_bet_display_cols = [c for c in ['人名', '盤口投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注'] if c in df_ko_bets.columns]
+            st.dataframe(df_ko_bets[df_ko_bets['場次'] == ko_bet_match_sel][ko_bet_display_cols], hide_index=True, use_container_width=True)
 
 with tab1:
-    st.subheader("🏆 燈閪盃排名")
-    df_scores_display = df_scores[['排名', '人名', '最終得分']].rename(columns={'最終得分': '得分'})
+    st.subheader("🏆 燈閪盃排名（小組賽 + 淘汰賽）")
+    df_scores_display = df_scores[['排名', '人名', '最終得分']].rename(columns={'最終得分': '小組賽得分', '排名': '小組賽排名'})
+
+    # 合併淘汰賽得分
+    ko_score_map = dict(zip(df_ko_scores['人名'], df_ko_scores['淘汰賽得分'])) if 'df_ko_scores' in dir() and not df_ko_scores.empty else {}
+    df_scores_display['淘汰賽得分'] = df_scores_display['人名'].map(lambda p: ko_score_map.get(p, 0))
+    df_scores_display['總分'] = df_scores_display['小組賽得分'] + df_scores_display['淘汰賽得分']
+    df_scores_display['排名'] = df_scores_display['總分'].rank(method='min', ascending=False).astype(int)
+    df_scores_display = df_scores_display.sort_values('排名')
+
     df_scores_display['走勢'] = df_scores_display['人名'].apply(calc_form_streak)
 
     # 計算回報率：每注平均回報 ÷ 本金
@@ -546,7 +581,6 @@ with tab1:
 
     roi_results = df_scores_display['人名'].apply(calc_roi)
     df_scores_display['回報率'] = roi_results.apply(lambda x: x[0])
-    df_scores_display['_roi_val'] = roi_results.apply(lambda x: x[1])
 
     def style_streak(val):
         if str(val).startswith('W'):
@@ -562,108 +596,105 @@ with tab1:
             return 'color: #dc2626; font-weight: bold;'
         return ''
 
-    display_final = df_scores_display[['排名', '人名', '得分', '走勢', '回報率']]
+    display_final = df_scores_display[['排名', '人名', '小組賽得分', '淘汰賽得分', '總分', '走勢', '回報率']]
     styled = display_final.style.map(style_streak, subset=['走勢']).map(style_roi, subset=['回報率'])
     st.dataframe(styled, hide_index=True, use_container_width=True)
-    st.caption(f"💡 走勢：W = 連勝，L = 連敗。回報率：假設每注本金 {STAKE} 蚊，按 Google Sheet 賠率計算嘅平均盈虧百分比（只計已開波、非走盤場次）")
+    st.caption(f"💡 總分 = 小組賽得分 + 淘汰賽得分。走勢：W = 連勝，L = 連敗（小組賽）。回報率：假設每注本金 {STAKE} 蚊，按 Google Sheet 賠率計算嘅平均盈虧百分比（只計小組賽已開波、非走盤場次）")
 
 with tab2:
     st.subheader("⚽ 比賽賽程與賽果")
     display_cols = [c for c in ['場次', '讓球球隊', '盤口', '開賽時間', '賽果分數', '賽果分類', '結果分類'] if c in df_matches.columns]
     st.dataframe(df_matches[display_cols], hide_index=True, use_container_width=True)
 
-with tab3:
-    st.subheader("📋 手足落注紀錄")
-    all_bet_matches = df_bets['場次'].unique().tolist()
-    # 預設最新未完場
-    default_idx = 0
-    if not unplayed.empty:
-        latest = str(unplayed.iloc[0]['場次']).strip()
-        if latest in all_bet_matches:
-            default_idx = all_bet_matches.index(latest)
-        else:
-            default_idx = len(all_bet_matches) - 1
-    sel_match = st.selectbox("查看場次", options=all_bet_matches, index=default_idx)
-    bet_col = '盤口' if '盤口' in df_bets.columns else '投注'
-    st.dataframe(df_bets[df_bets['場次'] == sel_match][['人名', bet_col]], hide_index=True, use_container_width=True)
+with tab_mix:
+    st.subheader("📊 小組賽詳情")
+    inner1, inner2, inner3 = st.tabs(["📋 下注紀錄", "📊 勝率與心水", "📈 詳細統計"])
 
-with tab4:
-    st.subheader("📊 勝率與下場心水")
-    upcoming = unplayed['場次'].iloc[0] if not unplayed.empty else None
-    stats = []
-    for p in all_players:
-        p_data = merged[merged['人名'] == p]
-        valid = p_data[p_data[target_res_col].notna() & (p_data[target_res_col].astype(str).str.strip() != '走盤') & (p_data[target_res_col].astype(str).str.strip() != 'nan') & (p_data[target_res_col].astype(str).str.strip() != '')]
-        wins = len(valid[valid['得分'] > 0])
-        total = len(valid)
+    with inner1:
+        all_bet_matches = df_bets['場次'].unique().tolist()
+        # 預設最新未完場
+        default_idx = 0
+        if not unplayed.empty:
+            latest = str(unplayed.iloc[0]['場次']).strip()
+            if latest in all_bet_matches:
+                default_idx = all_bet_matches.index(latest)
+            else:
+                default_idx = len(all_bet_matches) - 1
+        sel_match = st.selectbox("查看場次", options=all_bet_matches, index=default_idx)
         bet_col = '盤口' if '盤口' in df_bets.columns else '投注'
-        next_bet = df_bets[(df_bets['人名'] == p) & (df_bets['場次'] == upcoming)][bet_col].values
-        stats.append({
-            '人名': p,
-            '投注場次': total,
-            '贏嘅場次': wins,
-            '勝率': f"{(wins/total*100):.1f}%" if total > 0 else "0%",
-            '_sort': (wins/total*100) if total > 0 else 0,
-            '下一場心水': next_bet[0] if len(next_bet) > 0 else "未落注"
-        })
-    df_stats = pd.DataFrame(stats)
-    df_stats['勝率排名'] = df_stats['_sort'].rank(method='min', ascending=False).astype(int)
-    df_stats = df_stats.sort_values('勝率排名').reset_index(drop=True)
-    df_stats = df_stats[['勝率排名', '人名', '投注場次', '贏嘅場次', '勝率', '下一場心水']]
-    st.dataframe(df_stats, hide_index=True, use_container_width=True)
+        st.dataframe(df_bets[df_bets['場次'] == sel_match][['人名', bet_col]], hide_index=True, use_container_width=True)
 
-# =========================================================
-# 📈 Tab 5: 詳細個人統計（潛水扣分 + 完整數據）
-# =========================================================
-with tab5:
-    st.subheader("📈 手足詳細統計（含潛水扣分）")
-
-    if not df_bets.empty and not df_matches.empty:
-        df_bets_clean = df_bets.copy()
-        df_bets_clean['人名'] = df_bets_clean['人名'].astype(str).str.strip()
-        df_bets_clean['乾淨場次'] = df_bets_clean['場次'].astype(str).str.replace(' ', '').str.strip()
-
-        df_matches_clean = df_matches.copy()
-        df_matches_clean['乾淨場次'] = df_matches_clean['場次'].astype(str).str.replace(' ', '').str.strip()
-
-        # 已完場次
-        played_matches_df = df_matches_clean[
-            df_matches_clean[target_res_col].notna() &
-            (df_matches_clean[target_res_col].astype(str).str.strip() != '') &
-            (df_matches_clean[target_res_col].astype(str).str.strip() != 'nan')
-        ]
-        played_matches_clean = played_matches_df['乾淨場次'].tolist()
-        total_played_count = len(played_matches_clean)
-
-        # 合併計分
-        merged2 = df_bets_clean.merge(df_matches_clean[['乾淨場次', target_res_col]], on='乾淨場次', how='left')
-        merged2['得分'] = merged2.apply(get_points, axis=1)
-
-        df_player_scores = merged2.groupby('人名')['得分'].sum().reset_index()
+    with inner2:
+        upcoming = unplayed['場次'].iloc[0] if not unplayed.empty else None
+        stats = []
         for p in all_players:
-            p_clean = str(p).strip()
-            if p_clean not in df_player_scores['人名'].tolist():
-                df_player_scores = pd.concat([df_player_scores, pd.DataFrame([{'人名': p_clean, '得分': 0}])], ignore_index=True)
+            p_data = merged[merged['人名'] == p]
+            valid = p_data[p_data[target_res_col].notna() & (p_data[target_res_col].astype(str).str.strip() != '走盤') & (p_data[target_res_col].astype(str).str.strip() != 'nan') & (p_data[target_res_col].astype(str).str.strip() != '')]
+            wins = len(valid[valid['得分'] > 0])
+            total = len(valid)
+            bet_col = '盤口' if '盤口' in df_bets.columns else '投注'
+            next_bet = df_bets[(df_bets['人名'] == p) & (df_bets['場次'] == upcoming)][bet_col].values
+            stats.append({
+                '人名': p,
+                '投注場次': total,
+                '贏嘅場次': wins,
+                '勝率': f"{(wins/total*100):.1f}%" if total > 0 else "0%",
+                '_sort': (wins/total*100) if total > 0 else 0,
+                '下一場心水': next_bet[0] if len(next_bet) > 0 else "未落注"
+            })
+        df_stats = pd.DataFrame(stats)
+        df_stats['勝率排名'] = df_stats['_sort'].rank(method='min', ascending=False).astype(int)
+        df_stats = df_stats.sort_values('勝率排名').reset_index(drop=True)
+        df_stats = df_stats[['勝率排名', '人名', '投注場次', '贏嘅場次', '勝率', '下一場心水']]
+        st.dataframe(df_stats, hide_index=True, use_container_width=True)
 
-        # 潛水扣分計算
-        def get_detailed_info(player_name):
-            p_str = str(player_name).strip()
-            df_p = df_bets_clean[df_bets_clean['人名'] == p_str]
-            player_bets_in_played = df_p[df_p['乾淨場次'].isin(played_matches_clean)]['乾淨場次'].nunique() if not df_p.empty else 0
-            total_missed = total_played_count - player_bets_in_played
-            penalty = (total_missed // 2) * 10 if total_missed >= 2 else 0
-            return pd.Series([total_played_count, player_bets_in_played, total_missed, penalty])
+    with inner3:
+        if not df_bets.empty and not df_matches.empty:
+            df_bets_clean = df_bets.copy()
+            df_bets_clean['人名'] = df_bets_clean['人名'].astype(str).str.strip()
+            df_bets_clean['乾淨場次'] = df_bets_clean['場次'].astype(str).str.replace(' ', '').str.strip()
 
-        df_player_scores[['總場數', '已投場數', '漏投場數', '潛水扣分']] = df_player_scores['人名'].apply(get_detailed_info)
-        df_player_scores['最終得分'] = df_player_scores['得分'] - df_player_scores['潛水扣分']
-        df_player_scores = df_player_scores.sort_values('最終得分', ascending=False).reset_index(drop=True)
-        df_player_scores.index += 1
-        df_player_scores = df_player_scores.reset_index().rename(columns={'index': '排名', '得分': '基礎得分', '最終得分': '得分'})
+            df_matches_clean = df_matches.copy()
+            df_matches_clean['乾淨場次'] = df_matches_clean['場次'].astype(str).str.replace(' ', '').str.strip()
 
-        st.dataframe(df_player_scores[['排名', '人名', '基礎得分', '總場數', '已投場數', '漏投場數', '潛水扣分', '得分']], hide_index=True, use_container_width=True)
-        st.caption("💡 潛水扣分：每漏投2場扣10分（向下取整）")
-    else:
-        st.info("暫時未有足夠數據。")
+            # 已完場次
+            played_matches_df = df_matches_clean[
+                df_matches_clean[target_res_col].notna() &
+                (df_matches_clean[target_res_col].astype(str).str.strip() != '') &
+                (df_matches_clean[target_res_col].astype(str).str.strip() != 'nan')
+            ]
+            played_matches_clean = played_matches_df['乾淨場次'].tolist()
+            total_played_count = len(played_matches_clean)
+
+            # 合併計分
+            merged2 = df_bets_clean.merge(df_matches_clean[['乾淨場次', target_res_col]], on='乾淨場次', how='left')
+            merged2['得分'] = merged2.apply(get_points, axis=1)
+
+            df_player_scores = merged2.groupby('人名')['得分'].sum().reset_index()
+            for p in all_players:
+                p_clean = str(p).strip()
+                if p_clean not in df_player_scores['人名'].tolist():
+                    df_player_scores = pd.concat([df_player_scores, pd.DataFrame([{'人名': p_clean, '得分': 0}])], ignore_index=True)
+
+            # 潛水扣分計算
+            def get_detailed_info(player_name):
+                p_str = str(player_name).strip()
+                df_p = df_bets_clean[df_bets_clean['人名'] == p_str]
+                player_bets_in_played = df_p[df_p['乾淨場次'].isin(played_matches_clean)]['乾淨場次'].nunique() if not df_p.empty else 0
+                total_missed = total_played_count - player_bets_in_played
+                penalty = (total_missed // 2) * 10 if total_missed >= 2 else 0
+                return pd.Series([total_played_count, player_bets_in_played, total_missed, penalty])
+
+            df_player_scores[['總場數', '已投場數', '漏投場數', '潛水扣分']] = df_player_scores['人名'].apply(get_detailed_info)
+            df_player_scores['最終得分'] = df_player_scores['得分'] - df_player_scores['潛水扣分']
+            df_player_scores = df_player_scores.sort_values('最終得分', ascending=False).reset_index(drop=True)
+            df_player_scores.index += 1
+            df_player_scores = df_player_scores.reset_index().rename(columns={'index': '排名', '得分': '基礎得分', '最終得分': '得分'})
+
+            st.dataframe(df_player_scores[['排名', '人名', '基礎得分', '總場數', '已投場數', '漏投場數', '潛水扣分', '得分']], hide_index=True, use_container_width=True)
+            st.caption("💡 潛水扣分：每漏投2場扣10分（向下取整）")
+        else:
+            st.info("暫時未有足夠數據。")
 
 # =========================================================
 # ✅ Tab 6: 賽果核對
@@ -774,33 +805,3 @@ with tab7:
             st.dataframe(ref_df, hide_index=True, use_container_width=True)
 
         st.caption("💡 線圖顯示每位手足喺每場開波後嘅累積得分（未計潛水扣分），方便睇返大家嘅起跌走勢。")
-
-# =========================================================
-# 🏆 Tab 8: 淘汰賽
-# =========================================================
-with tab8:
-    st.subheader("🏆 淘汰賽積分排名")
-
-    if df_ko_matches.empty:
-        st.info("淘汰賽賽程未準備好。")
-    else:
-        st.dataframe(df_ko_scores[['排名', '人名', '淘汰賽得分']], hide_index=True, use_container_width=True)
-        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，唔投扣20）、半場波膽中+50、全場波膽中+30、半全場中+20、上/下半頭15分入球中各+30，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
-
-        st.divider()
-        st.subheader("⚽ 淘汰賽賽程")
-        ko_display_cols = [c for c in ['場次', '輪次', '讓球球隊', '盤口', '開賽時間', '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球'] if c in df_ko_matches.columns]
-        st.dataframe(df_ko_matches[ko_display_cols], hide_index=True, use_container_width=True)
-
-        if not df_ko_champion.empty:
-            st.divider()
-            st.subheader("👑 奪冠球隊投注紀錄")
-            champ_display_cols = [c for c in ['人名', '投注球隊'] if c in df_ko_champion.columns]
-            st.dataframe(df_ko_champion[champ_display_cols], hide_index=True, use_container_width=True)
-
-        if not df_ko_bets.empty:
-            st.divider()
-            st.subheader("📋 淘汰賽落注紀錄")
-            ko_bet_match_sel = st.selectbox("查看場次", options=df_ko_bets['場次'].unique(), key="ko_bet_view_sb")
-            ko_bet_display_cols = [c for c in ['人名', '盤口投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注'] if c in df_ko_bets.columns]
-            st.dataframe(df_ko_bets[df_ko_bets['場次'] == ko_bet_match_sel][ko_bet_display_cols], hide_index=True, use_container_width=True)
