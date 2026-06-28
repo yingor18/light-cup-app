@@ -40,7 +40,7 @@ def safe_load(sheet_name, cols):
         return pd.DataFrame(columns=cols)
 
 ko_matches_cols = ['場次', '輪次', '讓球球隊', '盤口', '上盤賠率', '下盤賠率', '開賽時間',
-                    '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球']
+                    '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '啟動晉級計分']
 ko_bets_cols = ['人名', '場次', '盤口投注', '晉級球隊投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注', '時間戳記']
 ko_champion_cols = ['人名', '投注球隊', '是否冠軍', '時間戳記']
 
@@ -146,7 +146,12 @@ def ko_get_handicap_points(row):
 
 def ko_get_advance_points(row):
     """晉級球隊：必揀，直接睇全場賽果分數（例如2:1）判斷邊隊比數高就係晉級隊，唔理讓球
-       中+10/唔中-10，未揀-10"""
+       中+10/唔中-10，未揀-10
+       只有 KO_Matches 嗰場「啟動晉級計分」打「是」先會計分（管理員手動控制邊場起計）"""
+    enabled = str(row.get('啟動晉級計分', '')).strip()
+    if enabled != '是':
+        return 0  # 未啟動晉級計分嘅場次，一律唔計分（用嚎處理已經完場、新功能加入前嘅場次）
+
     user_bet = str(row.get('晉級球隊投注', '')).strip()
     score_str = str(row.get('全場賽果分數', '')).strip()
     match_name = str(row.get('場次', '')).strip()
@@ -243,7 +248,7 @@ if not df_ko_bets.empty and not df_ko_matches.empty:
     df_ko_bets['乾淨場次'] = df_ko_bets['場次'].astype(str).str.replace(' ', '').str.strip()
     df_ko_matches['乾淨場次'] = df_ko_matches['場次'].astype(str).str.replace(' ', '').str.strip()
 
-    ko_merge_cols = [c for c in ['乾淨場次', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '讓球球隊', '盤口', '半場賽果分數', '全場賽果分數'] if c in df_ko_matches.columns]
+    ko_merge_cols = [c for c in ['乾淨場次', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '讓球球隊', '盤口', '半場賽果分數', '全場賽果分數', '啟動晉級計分'] if c in df_ko_matches.columns]
     ko_merged = df_ko_bets.merge(df_ko_matches[ko_merge_cols], on='乾淨場次', how='left', suffixes=('', '_match'))
 
     ko_merged['盤口得分'] = ko_merged.apply(ko_get_handicap_points, axis=1)
@@ -272,14 +277,14 @@ else:
 ko_total_played = len(ko_played_matches)
 
 def ko_calc_penalty(player_name):
-    """淘汰賽漏賭扣分：完全冇落呢場注 -10（每場）"""
+    """淘汰賽漏賭扣分：完全冇落呢場注 -20（盤口-10 + 晉級球隊-10）"""
     if df_ko_bets.empty:
         return 0
     p_bets = df_ko_bets[df_ko_bets['人名'] == str(player_name).strip()]
     bet_matches = [m.replace(' ', '').strip() for m in p_bets['場次'].astype(str).tolist()] if not p_bets.empty else []
     ko_played_clean = [m.replace(' ', '').strip() for m in ko_played_matches]
     missed = ko_total_played - len([m for m in ko_played_clean if m in bet_matches])
-    return missed * 10
+    return missed * 20
 
 def ko_get_champion_points(player_name):
     """奪冠球隊：中+100，錯0，未出冠軍前都係0"""
@@ -584,7 +589,7 @@ with tab_ko:
         st.dataframe(df_ko_scores[['排名', '人名', '淘汰賽得分']], hide_index=True, use_container_width=True)
         if ACTUAL_CHAMPION_TEAM:
             st.caption(f"👑 冠軍隊：{ACTUAL_CHAMPION_TEAM}（已計入奪冠球隊得分）")
-        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，唔投扣10）、晉級球隊中+10/錯-10（必揀，唔揀扣10）、半場波膽中+30、全場波膽中+50、半全場中+20、上/下半頭15分入球中各+30，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
+        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，完全唔落注扣-20=盤口10+晉級10）、晉級球隊中+10/錯-10（必揀，唔揀扣10，只有KO_Matches打咗「啟動晉級計分=是」嘅場次先會計分）、半場波膽中+30、全場波膽中+50、半全場中+20、上/下半頭15分入球中各+30，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
 
         if not df_ko_champion.empty:
             st.divider()
