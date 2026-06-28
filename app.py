@@ -515,7 +515,7 @@ if 'champ_msg' in st.session_state:
     else:
         st.sidebar.error(msg_text)
 
-with st.sidebar.expander("👑 奪冠球隊（一次性，鎖死）", expanded=False):
+with st.sidebar.expander("👑 奪冠球隊", expanded=False):
     if not KO_TEAMS:
         st.info("32強隊伍名單未準備好。")
     else:
@@ -662,7 +662,7 @@ with tab_ko_mix:
                 ko_stats.append({
                     '人名': p,
                     '投注場次': total,
-                    '贏嘅場次': wins,
+                    '勝場': wins,
                     '勝率': f"{(wins/total*100):.1f}%" if total > 0 else "0%",
                     '_sort': (wins/total*100) if total > 0 else 0,
                     '下一場心水': next_bet[0] if len(next_bet) > 0 else "未落注"
@@ -670,7 +670,7 @@ with tab_ko_mix:
             ko_df_stats = pd.DataFrame(ko_stats)
             ko_df_stats['勝率排名'] = ko_df_stats['_sort'].rank(method='min', ascending=False).astype(int)
             ko_df_stats = ko_df_stats.sort_values('勝率排名').reset_index(drop=True)
-            ko_df_stats = ko_df_stats[['勝率排名', '人名', '投注場次', '贏嘅場次', '勝率', '下一場心水']]
+            ko_df_stats = ko_df_stats[['勝率排名', '人名', '投注場次', '勝場', '勝率', '下一場心水']]
             st.dataframe(ko_df_stats, hide_index=True, use_container_width=True)
             st.caption("💡 呢個勝率只計「盤口」項目（必投項目），唔包括半場波膽/全場波膽/半全場/頭15分入球。")
 
@@ -712,7 +712,7 @@ with tab_mix:
             stats.append({
                 '人名': p,
                 '投注場次': total,
-                '贏嘅場次': wins,
+                '勝場': wins,
                 '勝率': f"{(wins/total*100):.1f}%" if total > 0 else "0%",
                 '_sort': (wins/total*100) if total > 0 else 0,
                 '下一場心水': next_bet[0] if len(next_bet) > 0 else "未落注"
@@ -720,7 +720,7 @@ with tab_mix:
         df_stats = pd.DataFrame(stats)
         df_stats['勝率排名'] = df_stats['_sort'].rank(method='min', ascending=False).astype(int)
         df_stats = df_stats.sort_values('勝率排名').reset_index(drop=True)
-        df_stats = df_stats[['勝率排名', '人名', '投注場次', '贏嘅場次', '勝率', '下一場心水']]
+        df_stats = df_stats[['勝率排名', '人名', '投注場次', '勝場', '勝率', '下一場心水']]
         st.dataframe(df_stats, hide_index=True, use_container_width=True)
 
     with inner3:
