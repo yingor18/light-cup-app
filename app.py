@@ -252,12 +252,13 @@ else:
 ko_total_played = len(ko_played_matches)
 
 def ko_calc_penalty(player_name):
-    """淘汰賽漏賭扣分：盤口冇落注 -20"""
     if df_ko_bets.empty:
         return 0
     p_bets = df_ko_bets[df_ko_bets['人名'] == str(player_name).strip()]
-    bet_matches = p_bets['場次'].astype(str).str.strip().tolist() if not p_bets.empty else []
-    missed = ko_total_played - len([m for m in ko_played_matches if m in bet_matches])
+    # 兩邊都去除空格再比對
+    bet_matches = [m.replace(' ', '').strip() for m in p_bets['場次'].astype(str).tolist()] if not p_bets.empty else []
+    ko_played_clean = [m.replace(' ', '').strip() for m in ko_played_matches]
+    missed = ko_total_played - len([m for m in ko_played_clean if m in bet_matches])
     return missed * 20
 
 def ko_get_champion_points(player_name):
