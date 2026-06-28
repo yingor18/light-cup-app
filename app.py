@@ -41,7 +41,7 @@ def safe_load(sheet_name, cols):
 
 ko_matches_cols = ['場次', '輪次', '讓球球隊', '盤口', '上盤賠率', '下盤賠率', '開賽時間',
                     '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球']
-ko_bets_cols = ['人名', '場次', '盤口投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注', '時間戳記']
+ko_bets_cols = ['人名', '場次', '盤口投注', '晉級球隊投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注', '時間戳記']
 ko_champion_cols = ['人名', '投注球隊', '是否冠軍', '時間戳記']
 
 df_ko_matches = safe_load("KO_Matches", ko_matches_cols)
@@ -144,6 +144,36 @@ def ko_get_handicap_points(row):
         return 5 if user_bet == '下盤' else -5
     return 0
 
+def ko_get_advance_points(row):
+    """晉級球隊：必揀，直接睇全場賽果分數（例如2:1）判斷邊隊比數高就係晉級隊，唔理讓球
+       中+10/唔中-10，未揀-10"""
+    user_bet = str(row.get('晉級球隊投注', '')).strip()
+    score_str = str(row.get('全場賽果分數', '')).strip()
+    match_name = str(row.get('場次', '')).strip()
+
+    if score_str in ['', 'nan', 'None'] or ':' not in score_str:
+        return 0  # 未開波/未填全場賽果，唔計分
+
+    teams = match_name.split(' vs ')
+    if len(teams) != 2:
+        return 0
+    home_team, away_team = teams[0].strip(), teams[1].strip()
+
+    try:
+        home_score, away_score = score_str.split(':')
+        home_score, away_score = int(home_score.strip()), int(away_score.strip())
+    except (ValueError, IndexError):
+        return 0
+
+    if home_score == away_score:
+        return 0  # 淘汰賽理論上唔會和波，如果真係和波（例如未打加時/互射）就唔計分
+
+    advancing_team = home_team if home_score > away_score else away_team
+
+    if user_bet in ['', 'nan']:
+        return -10  # 必揀，未揀扣10
+    return 10 if user_bet == advancing_team else -10
+
 def ko_get_score_points(row, bet_col, result_col, win_pts):
     user_bet = str(row.get(bet_col, '')).strip()
     result = str(row.get(result_col, '')).strip()
@@ -217,6 +247,7 @@ if not df_ko_bets.empty and not df_ko_matches.empty:
     ko_merged = df_ko_bets.merge(df_ko_matches[ko_merge_cols], on='乾淨場次', how='left', suffixes=('', '_match'))
 
     ko_merged['盤口得分'] = ko_merged.apply(ko_get_handicap_points, axis=1)
+    ko_merged['晉級球隊得分'] = ko_merged.apply(ko_get_advance_points, axis=1)
     ko_merged['半場波膽得分'] = ko_merged.apply(lambda r: ko_get_score_points(r, '半場波膽投注', '半場賽果分數', 30), axis=1) if '半場賽果分數' in df_ko_matches.columns else 0
     ko_merged['全場波膽得分'] = ko_merged.apply(lambda r: ko_get_score_points(r, '全場波膽投注', '全場賽果分數', 50), axis=1) if '全場賽果分數' in df_ko_matches.columns else 0
     ko_merged['半全場得分'] = ko_merged.apply(ko_get_htft_points, axis=1)
@@ -224,7 +255,7 @@ if not df_ko_bets.empty and not df_ko_matches.empty:
     ko_merged['下半15分得分'] = ko_merged.apply(lambda r: ko_get_first15_points(r, '下半頭15分投注', '下半頭15分入球'), axis=1)
 
     ko_merged['淘汰賽總分'] = (
-        ko_merged['盤口得分'] + ko_merged['半場波膽得分'] + ko_merged['全場波膽得分'] +
+        ko_merged['盤口得分'] + ko_merged['晉級球隊得分'] + ko_merged['半場波膽得分'] + ko_merged['全場波膽得分'] +
         ko_merged['半全場得分'] + ko_merged['上半15分得分'] + ko_merged['下半15分得分']
     )
 else:
@@ -241,14 +272,14 @@ else:
 ko_total_played = len(ko_played_matches)
 
 def ko_calc_penalty(player_name):
-    """淘汰賽漏賭扣分：盤口冇落注 -20"""
+    """淘汰賽漏賭扣分：完全冇落呢場注 -10（每場）"""
     if df_ko_bets.empty:
         return 0
     p_bets = df_ko_bets[df_ko_bets['人名'] == str(player_name).strip()]
     bet_matches = [m.replace(' ', '').strip() for m in p_bets['場次'].astype(str).tolist()] if not p_bets.empty else []
     ko_played_clean = [m.replace(' ', '').strip() for m in ko_played_matches]
     missed = ko_total_played - len([m for m in ko_played_clean if m in bet_matches])
-    return missed * 20
+    return missed * 10
 
 def ko_get_champion_points(player_name):
     """奪冠球隊：中+100，錯0，未出冠軍前都係0"""
@@ -451,32 +482,35 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
             other_team = away_team if handicap_team == home_team else home_team
 
             with st.form("ko_bet_form", clear_on_submit=True):
-                st.markdown(f"**1. 盤口（必投，唔投扣20分）**")
+                st.markdown(f"**1. 盤口（必投，唔投扣10分）**")
                 ko_handicap = st.radio("盤口", [f"上盤 {handicap_team}", f"下盤 {other_team}"], key="ko_handicap_radio", label_visibility="collapsed")
                 ko_handicap_val = "上盤" if ko_handicap.startswith("上盤") else "下盤"
 
-                st.markdown("**2. 半場波膽（選擇性，中+30/錯-10）**")
+                st.markdown("**2. 晉級球隊（必揀，唔揀扣10分，中+10/錯-10）**")
+                ko_advance = st.radio("晉級球隊", [home_team, away_team], key="ko_advance_radio", label_visibility="collapsed")
+
+                st.markdown("**3. 半場波膽（選擇性，中+30/錯-10）**")
                 half_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2",
                                        "0:0", "1:1", "2:2", "3:3",
                                        "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4",
                                        "主其他", "客其他"]
                 ko_half_score = st.selectbox("半場波膽", half_score_options, key="ko_half_score_sb", label_visibility="collapsed")
 
-                st.markdown("**3. 全場波膽（選擇性，中+50/錯-10）**")
+                st.markdown("**4. 全場波膽（選擇性，中+50/錯-10）**")
                 full_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2", "4:3", "5:1", "5:2", "5:3", "5:4",
                                        "0:0", "1:1", "2:2", "3:3",
                                        "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4", "3:4", "1:5", "2:5", "3:5", "4:5",
                                        "主其他", "客其他"]
                 ko_full_score = st.selectbox("全場波膽", full_score_options, key="ko_full_score_sb", label_visibility="collapsed")
 
-                st.markdown("**4. 半全場（選擇性，中+20/錯-10）**")
-                htft_options = ["未揀", "主主", "主客", "和和", "客客", "客主"]
+                st.markdown("**5. 半全場（選擇性，中+20/錯-10）**")
+                htft_options = ["未揀", "主主", "主客", "和和", "客客", "客主", "和主", "和客"]
                 ko_htft = st.selectbox("半全場", htft_options, key="ko_htft_sb", label_visibility="collapsed")
 
-                st.markdown("**5. 上半場頭15分鐘入球（選擇性，揀「是」中+30/錯-10，唔揀就唔計分）**")
+                st.markdown("**6. 上半場頭15分鐘入球（選擇性，揀「是」中+30/錯-10，唔揀就唔計分）**")
                 ko_first15_1h = st.selectbox("上半頭15分", ["未揀", "是"], key="ko_first15_1h_sb", label_visibility="collapsed")
 
-                st.markdown("**6. 下半場頭15分鐘入球（選擇性，揀「是」中+30/錯-10，唔揀就唔計分）**")
+                st.markdown("**7. 下半場頭15分鐘入球（選擇性，揀「是」中+30/錯-10，唔揀就唔計分）**")
                 ko_first15_2h = st.selectbox("下半頭15分", ["未揀", "是"], key="ko_first15_2h_sb", label_visibility="collapsed")
 
                 if st.form_submit_button("🔥 提交淘汰賽投注"):
@@ -492,6 +526,7 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
                                 'name': ku,
                                 'match': km,
                                 '盤口投注': ko_handicap_val,
+                                '晉級球隊投注': ko_advance,
                                 '半場波膽投注': '' if ko_half_score == '未揀' else ko_half_score,
                                 '全場波膽投注': '' if ko_full_score == '未揀' else ko_full_score,
                                 '半全場投注': '' if ko_htft == '未揀' else ko_htft,
@@ -549,7 +584,7 @@ with tab_ko:
         st.dataframe(df_ko_scores[['排名', '人名', '淘汰賽得分']], hide_index=True, use_container_width=True)
         if ACTUAL_CHAMPION_TEAM:
             st.caption(f"👑 冠軍隊：{ACTUAL_CHAMPION_TEAM}（已計入奪冠球隊得分）")
-        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，唔投扣20）、半場波膽中+30、全場波膽中+50、半全場中+20、上/下半頭15分入球中各+30，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
+        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，唔投扣10）、晉級球隊中+10/錯-10（必揀，唔揀扣10）、半場波膽中+30、全場波膽中+50、半全場中+20、上/下半頭15分入球中各+30，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
 
         if not df_ko_champion.empty:
             st.divider()
@@ -824,7 +859,7 @@ with tab_ko_mix:
                 else:
                     ko_default_idx = len(ko_all_bet_matches) - 1
             ko_sel_match = st.selectbox("查看場次", options=ko_all_bet_matches, index=ko_default_idx, key="ko_mix_match_sb")
-            ko_bet_display_cols = [c for c in ['人名', '盤口投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注'] if c in df_ko_bets.columns]
+            ko_bet_display_cols = [c for c in ['人名', '盤口投注', '晉級球隊投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注'] if c in df_ko_bets.columns]
             ko_bet_view_df = df_ko_bets[df_ko_bets['場次'] == ko_sel_match][ko_bet_display_cols].copy()
             # 確保空白顯示為「-」而唔係 NaN/空白睇唔到
             for c in ['半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注']:
@@ -1032,13 +1067,16 @@ with tab6:
                 for _, r in ko_p_data.iterrows():
                     handicap_result = str(r.get('賽果分類', '')).strip()
                     has_handicap_result = handicap_result in KO_PLAYED_STATUSES
+                    has_full_score = str(r.get('全場賽果分數', '')).strip() not in ['', 'nan', 'None']
                     rows.append({
                         '場次': r['場次'],
                         '盤口投注': r.get('盤口投注', ''),
                         '盤口結果': handicap_result if has_handicap_result else '未開波',
                         '盤口': ko_get_check_mark(r.get('盤口得分', 0), str(r.get('盤口投注', '')).strip() not in ['', 'nan'], has_handicap_result),
+                        '晉級球隊投注': r.get('晉級球隊投注', ''),
+                        '晉級球隊': ko_get_check_mark(r.get('晉級球隊得分', 0), str(r.get('晉級球隊投注', '')).strip() not in ['', 'nan'], has_full_score),
                         '半場波膽': ko_get_check_mark(r.get('半場波膽得分', 0), str(r.get('半場波膽投注', '')).strip() not in ['', 'nan'], str(r.get('半場賽果分數', '')).strip() not in ['', 'nan', 'None']),
-                        '全場波膽': ko_get_check_mark(r.get('全場波膽得分', 0), str(r.get('全場波膽投注', '')).strip() not in ['', 'nan'], str(r.get('全場賽果分數', '')).strip() not in ['', 'nan', 'None']),
+                        '全場波膽': ko_get_check_mark(r.get('全場波膽得分', 0), str(r.get('全場波膽投注', '')).strip() not in ['', 'nan'], has_full_score),
                         '半全場': ko_get_check_mark(r.get('半全場得分', 0), str(r.get('半全場投注', '')).strip() not in ['', 'nan'], str(r.get('半全場結果', '')).strip() not in ['', 'nan', 'None']),
                         '上半15分': ko_get_check_mark(r.get('上半15分得分', 0), str(r.get('上半頭15分投注', '')).strip() not in ['', 'nan'], str(r.get('上半頭15分入球', '')).strip() not in ['', 'nan', 'None']),
                         '下半15分': ko_get_check_mark(r.get('下半15分得分', 0), str(r.get('下半頭15分投注', '')).strip() not in ['', 'nan'], str(r.get('下半頭15分入球', '')).strip() not in ['', 'nan', 'None']),
