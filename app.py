@@ -606,72 +606,192 @@ with tab2:
 
     with sched_inner1:
         st.subheader("🏆 淘汰賽對賽表")
-        # 32強對賽表（Bracket）
-        bracket_pairs = [
+
+        def get_match_by_teams(team_a, team_b, round_name=None):
+            """根據隊名（同可選輪次）搵返 KO_Matches 嘅資料"""
+            if df_ko_matches.empty:
+                return None
+            for _, row in df_ko_matches.iterrows():
+                m_str = str(row['場次']).strip()
+                if team_a in m_str and team_b in m_str:
+                    if round_name is None or str(row.get('輪次', '')).strip() == round_name:
+                        return row
+            return None
+
+        def get_match_winner(match_row):
+            """判斷呢場波贖咗邊隊（用賽果分類），未開波/未填賽果就 return None"""
+            if match_row is None:
+                return None
+            result_cat = str(match_row.get('賽果分類', '')).strip()
+            if result_cat not in KO_PLAYED_STATUSES:
+                return None
+            teams_in_match = str(match_row['場次']).split(' vs ')
+            if len(teams_in_match) != 2:
+                return None
+            home_t, away_t = teams_in_match[0].strip(), teams_in_match[1].strip()
+            handicap_team = str(match_row.get('讓球球隊', '')).strip()
+            if result_cat in ['上盤', '上盤贏半']:
+                return handicap_team
+            else:
+                return away_t if handicap_team == home_t else home_t
+
+        def get_match_kickoff(match_row):
+            if match_row is None:
+                return None
+            k = str(match_row.get('開賽時間', '')).strip()
+            return None if k in ['', 'nan', 'None'] else k
+
+        # 32強左右對位（跟世界盃官方對賽表結構）
+        r32_left = [
             ("德國", "巴拉圭"), ("法國", "瑞典"),
             ("南非", "加拿大"), ("荷蘭", "摩洛哥"),
             ("葡萄牙", "克羅地亞"), ("西班牙", "奧地利"),
             ("美國", "波斯尼亞"), ("比利時", "塞內加爾"),
+        ]
+        r32_right = [
             ("巴西", "日本"), ("科特迪瓦", "挪威"),
             ("墨西哥", "厄瓜多爾"), ("英格蘭", "剛果民主共和國"),
             ("阿根廷", "佛得角"), ("澳洲", "埃及"),
             ("瑞士", "阿爾及利亞"), ("哥倫比亞", "加納"),
         ]
 
-        def get_match_info(team_a, team_b):
-            """根據隊名搵返呢場喺 KO_Matches 嘅資料"""
-            if df_ko_matches.empty:
-                return None
-            for _, row in df_ko_matches.iterrows():
-                m_str = str(row['場次']).strip()
-                if (team_a in m_str and team_b in m_str):
-                    return row
-            return None
+        def winner_or_placeholder(team_a, team_b, round_name):
+            m = get_match_by_teams(team_a, team_b, round_name)
+            w = get_match_winner(m)
+            return w if w else "待定"
 
-        def render_team_box(team, match_row, is_winner_side=None):
-            result = ""
-            if match_row is not None:
-                kickoff = str(match_row.get('開賽時間', '')).strip()
-                handicap_team = str(match_row.get('讓球球隊', '')).strip()
-                result_cat = str(match_row.get('賽果分類', '')).strip()
-                if result_cat in KO_PLAYED_STATUSES:
-                    # 判斷贏邊隊
-                    teams_in_match = str(match_row['場次']).split(' vs ')
-                    home_t = teams_in_match[0].strip() if len(teams_in_match) == 2 else ''
-                    away_t = teams_in_match[1].strip() if len(teams_in_match) == 2 else ''
-                    if result_cat in ['上盤', '上盤贏半']:
-                        winner = handicap_team
-                    else:
-                        winner = away_t if handicap_team == home_t else home_t
-                    if team == winner:
-                        result = " 🏆"
-            return team + result
+        # 計算16強配對（由32強勝方推算，如果未有結果就顯示「待定」）
+        def next_round_pairs(prev_pairs, round_name):
+            winners = [winner_or_placeholder(a, b, round_name) for a, b in prev_pairs]
+            return [(winners[i], winners[i+1]) for i in range(0, len(winners), 2)]
 
-        def render_match_box(team_a, team_b, match_row):
-            kickoff_str = "賽程未定"
-            label_a, label_b = team_a, team_b
-            if match_row is not None:
-                kickoff_str = str(match_row.get('開賽時間', '')).strip()
-                if kickoff_str in ['nan', 'None', '']:
-                    kickoff_str = "時間未定"
-                label_a = render_team_box(team_a, match_row)
-                label_b = render_team_box(team_b, match_row)
+        r16_left = next_round_pairs(r32_left, "32強")
+        r16_right = next_round_pairs(r32_right, "32強")
+        r8_left = next_round_pairs(r16_left, "16強")
+        r8_right = next_round_pairs(r16_right, "16強")
+        r4_left = next_round_pairs(r8_left, "8強")
+        r4_right = next_round_pairs(r8_right, "8強")
+        final_pair = next_round_pairs(r4_left + r4_right, "4強")[0] if (r4_left + r4_right) else ("待定", "待定")
 
-            with st.container(border=True):
-                st.caption(kickoff_str)
-                st.markdown(f"🔵 **{label_a}**")
-                st.markdown("<div style='text-align:center; color:#999; font-size:12px;'>vs</div>", unsafe_allow_html=True)
-                st.markdown(f"🔴 **{label_b}**")
+        # ===== 畫 SVG bracket =====
+        def esc(s):
+            return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
-        # 每行顯示4場，分3行（共16場）
-        for row_start in range(0, len(bracket_pairs), 4):
-            cols = st.columns(4)
-            for i, (team_a, team_b) in enumerate(bracket_pairs[row_start:row_start+4]):
-                match_row = get_match_info(team_a, team_b)
-                with cols[i]:
-                    render_match_box(team_a, team_b, match_row)
+        def box_svg(x, y, w, h, team_a, team_b, round_name, is_final=False):
+            m = get_match_by_teams(team_a, team_b, round_name) if team_a != "待定" and team_b != "待定" else None
+            winner = get_match_winner(m)
+            kickoff = get_match_kickoff(m)
+            fill = "#1a2332" if not is_final else "#2a1f0a"
+            stroke = "#3a4456"
+            mid_y = y + h / 2
+            label_a = esc(team_a) + (" 🏆" if winner == team_a else "")
+            label_b = esc(team_b) + (" 🏆" if winner == team_b else "")
+            color_a = "#f4d35e" if winner == team_a else "#e8e8e8"
+            color_b = "#f4d35e" if winner == team_b else "#e8e8e8"
+            time_label = f'<text x="{x+w/2}" y="{y-4}" text-anchor="middle" font-size="9" fill="#888">{esc(kickoff) if kickoff else ""}</text>' if kickoff else ""
+            return f'''
+            <rect x="{x}" y="{y}" width="{w}" height="{h}" rx="6" fill="{fill}" stroke="{stroke}" stroke-width="1"/>
+            <line x1="{x}" y1="{mid_y}" x2="{x+w}" y2="{mid_y}" stroke="{stroke}" stroke-width="0.5"/>
+            <text x="{x+8}" y="{y+h*0.32}" font-size="11" fill="{color_a}">{label_a}</text>
+            <text x="{x+8}" y="{y+h*0.78}" font-size="11" fill="{color_b}">{label_b}</text>
+            {time_label}
+            '''
 
-        st.caption("💡 32強對賽表，每隊名後面 🏆 代表已晉級。決賽：7月20日(一) 03:00　季軍戰：7月19日(日) 05:00")
+        # 佈局參數
+        BOX_W, BOX_H = 150, 34
+        UNIT = 50  # 32強每場之間嘅垂直間距
+
+        def y_center(round_level, index):
+            """round_level: 0=32強(8場), 1=16強(4場), 2=8強(2場), 3=4強(1場)
+               index: 嗰一輪第幾場（由0開始）
+               回傳該場波 box 嘅中心 Y 座標"""
+            spacing = UNIT * (2 ** round_level)
+            offset = spacing / 2 - UNIT / 2 if round_level > 0 else 0
+            return 20 + BOX_H/2 + index * spacing + offset
+
+        svg_h = int(y_center(0, 7) + BOX_H/2 + 30)
+
+        svg_parts = []
+
+        # X座標：32強(左) -> 16強(左) -> 8強(左) -> 4強(左) -> 決賽 <- 4強(右) <- 8強(右) <- 16強(右) <- 32強(右)
+        x32_l, x16_l, x8_l, x4_l = 10, 190, 370, 550
+        x_final = 730
+        x4_r, x8_r, x16_r, x32_r = 910, 1090, 1270, 1450
+        total_w = x32_r + BOX_W + 20
+
+        def put_box(x, round_level, index, team_a, team_b, round_name, is_final=False):
+            yc = y_center(round_level, index)
+            y = yc - BOX_H/2
+            svg_parts.append(box_svg(x, y, BOX_W, BOX_H, team_a, team_b, round_name, is_final))
+            return yc
+
+        # 32強左/右 (8場 each)
+        for i, (a, b) in enumerate(r32_left):
+            put_box(x32_l, 0, i, a, b, "32強")
+        for i, (a, b) in enumerate(r32_right):
+            put_box(x32_r, 0, i, a, b, "32強")
+
+        # 16強左/右 (4場 each)
+        for i, (a, b) in enumerate(r16_left):
+            put_box(x16_l, 1, i, a, b, "16強")
+        for i, (a, b) in enumerate(r16_right):
+            put_box(x16_r, 1, i, a, b, "16強")
+
+        # 8強左/右 (2場 each)
+        for i, (a, b) in enumerate(r8_left):
+            put_box(x8_l, 2, i, a, b, "8強")
+        for i, (a, b) in enumerate(r8_right):
+            put_box(x8_r, 2, i, a, b, "8強")
+
+        # 4強左/右 (1場 each)
+        if r4_left:
+            put_box(x4_l, 3, 0, r4_left[0][0], r4_left[0][1], "4強")
+        if r4_right:
+            put_box(x4_r, 3, 0, r4_right[0][0], r4_right[0][1], "4強")
+
+        # 決賽
+        y_final_mid = y_center(3, 0)
+        svg_parts.append(box_svg(x_final, y_final_mid - BOX_H/2, BOX_W, BOX_H, final_pair[0], final_pair[1], "決賽", is_final=True))
+        svg_parts.append(f'<text x="{x_final+BOX_W/2}" y="{y_final_mid-BOX_H/2-10}" text-anchor="middle" font-size="11" fill="#f4d35e">🏆 決賽 7/20(一) 03:00</text>')
+
+        # 連線
+        def connector(x1, y1, x2, y2):
+            mid_x = (x1 + x2) / 2
+            return f'<path d="M{x1},{y1} L{mid_x},{y1} L{mid_x},{y2} L{x2},{y2}" fill="none" stroke="#3a4456" stroke-width="1"/>'
+
+        # 32強 -> 16強
+        for i in range(8):
+            y_src = y_center(0, i)
+            y_dst = y_center(1, i // 2)
+            svg_parts.append(connector(x32_l + BOX_W, y_src, x16_l, y_dst))
+            svg_parts.append(connector(x32_r, y_src, x16_r + BOX_W, y_dst))
+
+        # 16強 -> 8強
+        for i in range(4):
+            y_src = y_center(1, i)
+            y_dst = y_center(2, i // 2)
+            svg_parts.append(connector(x16_l + BOX_W, y_src, x8_l, y_dst))
+            svg_parts.append(connector(x16_r, y_src, x8_r + BOX_W, y_dst))
+
+        # 8強 -> 4強
+        for i in range(2):
+            y_src = y_center(2, i)
+            y_dst = y_center(3, 0)
+            svg_parts.append(connector(x8_l + BOX_W, y_src, x4_l, y_dst))
+            svg_parts.append(connector(x8_r, y_src, x4_r + BOX_W, y_dst))
+
+        # 4強 -> 決賽
+        svg_parts.append(connector(x4_l + BOX_W, y_final_mid, x_final, y_final_mid))
+        svg_parts.append(connector(x4_r, y_final_mid, x_final + BOX_W, y_final_mid))
+
+        svg_content = "".join(svg_parts)
+        full_svg = f'<svg viewBox="0 0 {total_w} {svg_h}" width="100%" style="min-width:1200px;">{svg_content}</svg>'
+
+        st.markdown(
+            f'<div style="overflow-x:auto; background:#0d1117; padding:16px; border-radius:8px;">{full_svg}</div>',
+            unsafe_allow_html=True
+        )
+        st.caption("💡 32強對賽表，🏆代表已晉級。輪次配對需要 KO_Matches 填入對應隊名先會自動連接（例：16強要填「德國 vs 法國」呢類由32強勝方組成嘅場次）。決賽：7月20日(一) 03:00　季軍戰：7月19日(日) 05:00")
 
         st.divider()
         st.subheader("📋 淘汰賽詳細賽程")
