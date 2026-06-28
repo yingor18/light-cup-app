@@ -11,6 +11,7 @@ GAS_URL = "https://script.google.com/macros/s/AKfycby5-mVhmT5qlhTj3i5S-vxNxERhxC
 st.set_page_config(layout="wide", page_title="燈閪盃系統")
 st.title("🏆 世界盃 - 燈閪盃總覽")
 STREAK_PLACEHOLDER = st.empty()
+KO_STREAK_PLACEHOLDER = st.empty()
 
 @st.cache_data(ttl=0)
 def load_data(sheet):
@@ -287,6 +288,38 @@ df_ko_scores['排名'] = df_ko_scores['淘汰賽得分'].rank(method='min', asce
 df_ko_scores = df_ko_scores.sort_values('排名')
 
 # =========================================================
+# 淘汰賽連中提示（用「盤口」項目嚐連中計算，跟賽程順序）
+# =========================================================
+ko_match_order_map = {str(r).strip(): i for i, r in enumerate(df_ko_matches['場次'].tolist())} if not df_ko_matches.empty else {}
+
+def ko_calc_current_streak(player_name):
+    if ko_merged.empty:
+        return 0
+    p_data = ko_merged[ko_merged['人名'] == str(player_name).strip()].copy()
+    if p_data.empty:
+        return 0
+    p_data['_order'] = p_data['場次'].astype(str).str.strip().map(lambda x: ko_match_order_map.get(x, -1))
+    p_data['_result'] = p_data['賽果分類'].astype(str).str.strip() if '賽果分類' in p_data.columns else ''
+    valid = p_data[p_data['_result'].isin(KO_PLAYED_STATUSES)].sort_values('_order')
+    if valid.empty:
+        return 0
+    streak = 0
+    for score in reversed(valid['盤口得分'].tolist()):
+        if score > 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+ko_streak_data = [(p, ko_calc_current_streak(p)) for p in all_players]
+ko_max_streak_val = max((v for _, v in ko_streak_data), default=0)
+ko_top_streak_players = [p for p, v in ko_streak_data if v == ko_max_streak_val]
+
+if ko_max_streak_val >= 2:
+    ko_names_str = "、".join(ko_top_streak_players)
+    KO_STREAK_PLACEHOLDER.markdown(f"### 🔥 {ko_names_str} 喺淘汰賽已經連中 {ko_max_streak_val} 鋪了！")
+
+# =========================================================
 # 計算每個人「目前連中」場數，搵出最高嗰位
 # =========================================================
 match_order_map = {str(r).strip(): i for i, r in enumerate(df_matches['場次'].tolist())}
@@ -314,9 +347,9 @@ streak_data = [(p, calc_current_streak(p)) for p in all_players]
 max_streak_val = max((v for _, v in streak_data), default=0)
 top_streak_players = [p for p, v in streak_data if v == max_streak_val]
 
-if max_streak_val >= 2:
-    names_str = "、".join(top_streak_players)
-    STREAK_PLACEHOLDER.markdown(f"### 🔥 {names_str} 已經連中 {max_streak_val} 鋪了！")
+# 小組賽冠軍訊息（用小組賽最終得分嗰位）
+group_champion_name = df_scores.iloc[0]['人名'] if not df_scores.empty else ""
+STREAK_PLACEHOLDER.markdown(f"### 🏆 恭喜 {group_champion_name} 成為小組賽冠軍！！！")
 
 # =========================================================
 # 計算每個人嘅近況走勢（W3 / L2 格式，似 NBA STRK）
@@ -360,44 +393,47 @@ if 'bet_msg' in st.session_state:
     else:
         st.sidebar.error(msg_text)
 
-# 側邊欄落注
-st.sidebar.header("⚽ 手足落注")
-u = st.sidebar.selectbox("選擇名字", options=all_players, index=None)
-if unplayed.empty:
-    st.sidebar.info("🚫 全部比賽已開波或完場，無得再落注。")
-elif not unplayed.empty:
-    m = st.sidebar.selectbox("選擇場次", options=unplayed['場次'].tolist())
+# 側邊欄落注（小組賽已完，呢個區塊隱藏；要重開就將下面 GROUP_STAGE_BETTING_OPEN 改做 True）
+GROUP_STAGE_BETTING_OPEN = False
 
-    # 搵到呢場嘅讓球球隊
-    match_row = df_matches[df_matches['場次'].astype(str).str.strip() == str(m).strip()]
-    if not match_row.empty and '讓球球隊' in match_row.columns:
-        handicap_team = str(match_row.iloc[0]['讓球球隊']).strip()
-        # 受讓球隊係場次名度搵，去掉讓球隊就係受讓隊
-        teams = str(m).replace(' vs ', '|').split('|')
-        other_team = teams[1].strip() if len(teams) == 2 and teams[0].strip() == handicap_team else teams[0].strip() if len(teams) == 2 else ''
-        upper_label = f"上盤 {handicap_team}"
-        lower_label = f"下盤 {other_team}" if other_team else "下盤"
-    else:
-        upper_label = "上盤"
-        lower_label = "下盤"
+if GROUP_STAGE_BETTING_OPEN:
+    st.sidebar.header("⚽ 手足落注")
+    u = st.sidebar.selectbox("選擇名字", options=all_players, index=None)
+    if unplayed.empty:
+        st.sidebar.info("🚫 全部比賽已開波或完場，無得再落注。")
+    elif not unplayed.empty:
+        m = st.sidebar.selectbox("選擇場次", options=unplayed['場次'].tolist())
 
-    with st.sidebar.form("bet_form", clear_on_submit=True):
-        b_raw = st.radio("盤口", [upper_label, lower_label])
-        b = "上盤" if b_raw == upper_label else "下盤"
-        if st.form_submit_button("🔥 提交"):
-            if u is None:
-                st.session_state['bet_msg'] = ('error', "⚠️ 必須先選擇名字！")
-            else:
-                df_current = load_data("FinalBets")
-                if not df_current[(df_current['人名'] == u) & (df_current['場次'] == m)].empty:
-                    st.session_state['bet_msg'] = ('error', "❌ 呢場你投過喇，唔准改！")
+        # 搵到呢場嘅讓球球隊
+        match_row = df_matches[df_matches['場次'].astype(str).str.strip() == str(m).strip()]
+        if not match_row.empty and '讓球球隊' in match_row.columns:
+            handicap_team = str(match_row.iloc[0]['讓球球隊']).strip()
+            # 受讓球隊係場次名度搵，去掉讓球隊就係受讓隊
+            teams = str(m).replace(' vs ', '|').split('|')
+            other_team = teams[1].strip() if len(teams) == 2 and teams[0].strip() == handicap_team else teams[0].strip() if len(teams) == 2 else ''
+            upper_label = f"上盤 {handicap_team}"
+            lower_label = f"下盤 {other_team}" if other_team else "下盤"
+        else:
+            upper_label = "上盤"
+            lower_label = "下盤"
+
+        with st.sidebar.form("bet_form", clear_on_submit=True):
+            b_raw = st.radio("盤口", [upper_label, lower_label])
+            b = "上盤" if b_raw == upper_label else "下盤"
+            if st.form_submit_button("🔥 提交"):
+                if u is None:
+                    st.session_state['bet_msg'] = ('error', "⚠️ 必須先選擇名字！")
                 else:
-                    resp = requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
-                    if resp.status_code == 200:
-                        st.session_state['bet_msg'] = ('success', f"✅ 已成功下注！{u} 投 {b}")
+                    df_current = load_data("FinalBets")
+                    if not df_current[(df_current['人名'] == u) & (df_current['場次'] == m)].empty:
+                        st.session_state['bet_msg'] = ('error', "❌ 呢場你投過喇，唔准改！")
                     else:
-                        st.session_state['bet_msg'] = ('error', "系統繁忙，請重試")
-            st.rerun()
+                        resp = requests.get(GAS_URL, params={'name': u, 'match': m, 'bet': b})
+                        if resp.status_code == 200:
+                            st.session_state['bet_msg'] = ('success', f"✅ 已成功下注！{u} 投 {b}")
+                        else:
+                            st.session_state['bet_msg'] = ('error', "系統繁忙，請重試")
+                st.rerun()
 
 # =========================================================
 # 側邊欄：淘汰賽落注
@@ -701,53 +737,112 @@ with tab_mix:
 # =========================================================
 with tab6:
     st.subheader("✅ 賽果核對")
-    check_player = st.selectbox("選擇手足", options=all_players, key="check_player_sb")
+    check_inner1, check_inner2 = st.tabs(["⚽ 小組賽", "🏆 淘汰賽"])
 
-    p_data = merged[merged['人名'] == check_player].copy()
+    with check_inner1:
+        check_player = st.selectbox("選擇手足", options=all_players, key="check_player_sb")
 
-    if not p_data.empty:
-        bet_col = '盤口' if '盤口' in df_bets.columns else ('投注' if '投注' in df_bets.columns else None)
+        p_data = merged[merged['人名'] == check_player].copy()
 
-        def get_bet_choice(row):
-            if '盤口_x' in row:
-                return str(row['盤口_x']).strip()
-            elif '投注' in row and str(row.get('投注', '')).strip() not in ['', 'nan']:
-                return str(row['投注']).strip()
+        if not p_data.empty:
+            bet_col = '盤口' if '盤口' in df_bets.columns else ('投注' if '投注' in df_bets.columns else None)
+
+            def get_bet_choice(row):
+                if '盤口_x' in row:
+                    return str(row['盤口_x']).strip()
+                elif '投注' in row and str(row.get('投注', '')).strip() not in ['', 'nan']:
+                    return str(row['投注']).strip()
+                else:
+                    return str(row.get('盤口', '')).strip()
+
+            p_data['我嘅投注'] = p_data.apply(get_bet_choice, axis=1)
+            p_data['賽果'] = p_data[target_res_col].astype(str).str.strip()
+
+            def get_check_mark(row):
+                result = row['賽果']
+                if result in ['未開賽/進行中', '未開賽', '進行中', 'None', '', 'nan']:
+                    return "⏳ 未開波"
+                if result == '走盤':
+                    return "➖ 走盤"
+                if row['得分'] > 0:
+                    return "✅ 中"
+                elif row['得分'] < 0:
+                    return "❌ 唔中"
+                else:
+                    return "➖"
+
+            p_data['核對'] = p_data.apply(get_check_mark, axis=1)
+
+            # 跟賽程順序排
+            order_map = {str(r): i for i, r in enumerate(df_matches['場次'].tolist())}
+            p_data['_order'] = p_data['場次'].map(lambda x: order_map.get(str(x), 999))
+            p_data = p_data.sort_values('_order')
+
+            display_df = p_data[['場次', '我嘅投注', '賽果', '得分', '核對']].reset_index(drop=True)
+            st.dataframe(display_df, hide_index=True, use_container_width=True)
+
+            total_correct = len(p_data[p_data['得分'] > 0])
+            total_wrong = len(p_data[p_data['得分'] < 0])
+            total_valid = len(p_data[p_data['賽果'].isin(['上盤', '下盤', '上盤贏半', '下盤贏半'])])
+            st.caption(f"📌 {check_player} 共投注 {len(p_data)} 場，已開波 {total_valid} 場，中 {total_correct} 場，唔中 {total_wrong} 場")
+        else:
+            st.info(f"{check_player} 暫時未有投注紀錄。")
+
+    with check_inner2:
+        if df_ko_matches.empty or ko_merged.empty:
+            st.info("淘汰賽暫時未有數據。")
+        else:
+            ko_check_player = st.selectbox("選擇手足", options=all_players, key="ko_check_player_sb")
+
+            ko_p_data = ko_merged[ko_merged['人名'] == ko_check_player].copy()
+
+            if not ko_p_data.empty:
+                def ko_get_check_mark(score, has_bet, has_result):
+                    if not has_bet:
+                        return "➖ 未落注"
+                    if not has_result:
+                        return "⏳ 未開波"
+                    if score > 0:
+                        return "✅ 中"
+                    elif score < 0:
+                        return "❌ 唔中"
+                    else:
+                        return "➖"
+
+                rows = []
+                for _, r in ko_p_data.iterrows():
+                    handicap_result = str(r.get('賽果分類', '')).strip()
+                    has_handicap_result = handicap_result in KO_PLAYED_STATUSES
+                    rows.append({
+                        '場次': r['場次'],
+                        '盤口投注': r.get('盤口投注', ''),
+                        '盤口結果': handicap_result if has_handicap_result else '未開波',
+                        '盤口': ko_get_check_mark(r.get('盤口得分', 0), str(r.get('盤口投注', '')).strip() not in ['', 'nan'], has_handicap_result),
+                        '半場波膽': ko_get_check_mark(r.get('半場波膽得分', 0), str(r.get('半場波膽投注', '')).strip() not in ['', 'nan'], str(r.get('半場賽果分數', '')).strip() not in ['', 'nan', 'None']),
+                        '全場波膽': ko_get_check_mark(r.get('全場波膽得分', 0), str(r.get('全場波膽投注', '')).strip() not in ['', 'nan'], str(r.get('全場賽果分數', '')).strip() not in ['', 'nan', 'None']),
+                        '半全場': ko_get_check_mark(r.get('半全場得分', 0), str(r.get('半全場投注', '')).strip() not in ['', 'nan'], str(r.get('半全場結果', '')).strip() not in ['', 'nan', 'None']),
+                        '上半15分': ko_get_check_mark(r.get('上半15分得分', 0), str(r.get('上半頭15分投注', '')).strip() not in ['', 'nan'], str(r.get('上半頭15分入球', '')).strip() not in ['', 'nan', 'None']),
+                        '下半15分': ko_get_check_mark(r.get('下半15分得分', 0), str(r.get('下半頭15分投注', '')).strip() not in ['', 'nan'], str(r.get('下半頭15分入球', '')).strip() not in ['', 'nan', 'None']),
+                        '本場總分': r.get('淘汰賽總分', 0),
+                    })
+
+                ko_display_df = pd.DataFrame(rows)
+                # 跟淘汰賽賽程順序排
+                ko_display_df['_order'] = ko_display_df['場次'].map(lambda x: ko_match_order_map.get(str(x).strip(), 999))
+                ko_display_df = ko_display_df.sort_values('_order').drop(columns=['_order']).reset_index(drop=True)
+
+                st.dataframe(ko_display_df, hide_index=True, use_container_width=True)
+
+                # 奪冠球隊投注顯示
+                champ_pick = df_ko_champion[df_ko_champion['人名'] == ko_check_player] if not df_ko_champion.empty else pd.DataFrame()
+                champ_text = champ_pick.iloc[0]['投注球隊'] if not champ_pick.empty else "未落注"
+                st.caption(f"👑 奪冠球隊投注：{champ_text}")
+
+                ko_penalty = ko_calc_penalty(ko_check_player)
+                ko_total = ko_calc_total(ko_check_player)
+                st.caption(f"📌 {ko_check_player} 淘汰賽漏賭扣分：{ko_penalty}，淘汰賽總得分：{ko_total}")
             else:
-                return str(row.get('盤口', '')).strip()
-
-        p_data['我嘅投注'] = p_data.apply(get_bet_choice, axis=1)
-        p_data['賽果'] = p_data[target_res_col].astype(str).str.strip()
-
-        def get_check_mark(row):
-            result = row['賽果']
-            if result in ['未開賽/進行中', '未開賽', '進行中', 'None', '', 'nan']:
-                return "⏳ 未開波"
-            if result == '走盤':
-                return "➖ 走盤"
-            if row['得分'] > 0:
-                return "✅ 中"
-            elif row['得分'] < 0:
-                return "❌ 唔中"
-            else:
-                return "➖"
-
-        p_data['核對'] = p_data.apply(get_check_mark, axis=1)
-
-        # 跟賽程順序排
-        order_map = {str(r): i for i, r in enumerate(df_matches['場次'].tolist())}
-        p_data['_order'] = p_data['場次'].map(lambda x: order_map.get(str(x), 999))
-        p_data = p_data.sort_values('_order')
-
-        display_df = p_data[['場次', '我嘅投注', '賽果', '得分', '核對']].reset_index(drop=True)
-        st.dataframe(display_df, hide_index=True, use_container_width=True)
-
-        total_correct = len(p_data[p_data['得分'] > 0])
-        total_wrong = len(p_data[p_data['得分'] < 0])
-        total_valid = len(p_data[p_data['賽果'].isin(['上盤', '下盤', '上盤贏半', '下盤贏半'])])
-        st.caption(f"📌 {check_player} 共投注 {len(p_data)} 場，已開波 {total_valid} 場，中 {total_correct} 場，唔中 {total_wrong} 場")
-    else:
-        st.info(f"{check_player} 暫時未有投注紀錄。")
+                st.info(f"{ko_check_player} 暫時未有淘汰賽投注紀錄。")
 
 # =========================================================
 # 📉 Tab 7: 累積得分走勢圖
