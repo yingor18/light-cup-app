@@ -217,8 +217,8 @@ if not df_ko_bets.empty and not df_ko_matches.empty:
     ko_merged = df_ko_bets.merge(df_ko_matches[ko_merge_cols], on='乾淨場次', how='left', suffixes=('', '_match'))
 
     ko_merged['盤口得分'] = ko_merged.apply(ko_get_handicap_points, axis=1)
-    ko_merged['半場波膽得分'] = ko_merged.apply(lambda r: ko_get_score_points(r, '半場波膽投注', '半場賽果分數', 50), axis=1) if '半場賽果分數' in df_ko_matches.columns else 0
-    ko_merged['全場波膽得分'] = ko_merged.apply(lambda r: ko_get_score_points(r, '全場波膽投注', '全場賽果分數', 30), axis=1) if '全場賽果分數' in df_ko_matches.columns else 0
+    ko_merged['半場波膽得分'] = ko_merged.apply(lambda r: ko_get_score_points(r, '半場波膽投注', '半場賽果分數', 30), axis=1) if '半場賽果分數' in df_ko_matches.columns else 0
+    ko_merged['全場波膽得分'] = ko_merged.apply(lambda r: ko_get_score_points(r, '全場波膽投注', '全場賽果分數', 50), axis=1) if '全場賽果分數' in df_ko_matches.columns else 0
     ko_merged['半全場得分'] = ko_merged.apply(ko_get_htft_points, axis=1)
     ko_merged['上半15分得分'] = ko_merged.apply(lambda r: ko_get_first15_points(r, '上半頭15分投注', '上半頭15分入球'), axis=1)
     ko_merged['下半15分得分'] = ko_merged.apply(lambda r: ko_get_first15_points(r, '下半頭15分投注', '下半頭15分入球'), axis=1)
@@ -455,14 +455,14 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
                 ko_handicap = st.radio("盤口", [f"上盤 {handicap_team}", f"下盤 {other_team}"], key="ko_handicap_radio", label_visibility="collapsed")
                 ko_handicap_val = "上盤" if ko_handicap.startswith("上盤") else "下盤"
 
-                st.markdown("**2. 半場波膽（選擇性，中+50/錯-10）**")
+                st.markdown("**2. 半場波膽（選擇性，中+30/錯-10）**")
                 half_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2",
                                        "0:0", "1:1", "2:2", "3:3",
                                        "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4",
                                        "主其他", "客其他"]
                 ko_half_score = st.selectbox("半場波膽", half_score_options, key="ko_half_score_sb", label_visibility="collapsed")
 
-                st.markdown("**3. 全場波膽（選擇性，中+30/錯-10）**")
+                st.markdown("**3. 全場波膽（選擇性，中+50/錯-10）**")
                 full_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2", "4:3", "5:1", "5:2", "5:3", "5:4",
                                        "0:0", "1:1", "2:2", "3:3",
                                        "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4", "3:4", "1:5", "2:5", "3:5", "4:5",
@@ -549,7 +549,7 @@ with tab_ko:
         st.dataframe(df_ko_scores[['排名', '人名', '淘汰賽得分']], hide_index=True, use_container_width=True)
         if ACTUAL_CHAMPION_TEAM:
             st.caption(f"👑 冠軍隊：{ACTUAL_CHAMPION_TEAM}（已計入奪冠球隊得分）")
-        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，唔投扣20）、半場波膽中+50、全場波膽中+30、半全場中+20、上/下半頭15分入球中各+30，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
+        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，唔投扣20）、半場波膽中+30、全場波膽中+50、半全場中+20、上/下半頭15分入球中各+30，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
 
         if not df_ko_champion.empty:
             st.divider()
