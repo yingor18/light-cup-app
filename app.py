@@ -515,7 +515,7 @@ if 'champ_msg' in st.session_state:
     else:
         st.sidebar.error(msg_text)
 
-with st.sidebar.expander("👑 奪冠球隊", expanded=False):
+with st.sidebar.expander("👑 奪冠球隊（一次性，鎖死）", expanded=False):
     if not KO_TEAMS:
         st.info("32強隊伍名單未準備好。")
     else:
@@ -602,20 +602,92 @@ with tab1:
     st.caption(f"💡 總分 = 小組賽得分 + 淘汰賽得分。走勢：W = 連勝，L = 連敗（小組賽）。回報率：假設每注本金 {STAKE} 蚊，按 Google Sheet 賠率計算嘅平均盈虧百分比（只計小組賽已開波、非走盤場次）")
 
 with tab2:
-    sched_inner1, sched_inner2 = st.tabs(["⚽ 小組賽賽程", "🏆 淘汰賽賽程"])
+    sched_inner1, sched_inner2 = st.tabs(["🏆 淘汰賽賽程", "⚽ 小組賽賽程"])
 
     with sched_inner1:
-        st.subheader("⚽ 比賽賽程與賽果")
-        display_cols = [c for c in ['場次', '讓球球隊', '盤口', '開賽時間', '賽果分數', '賽果分類', '結果分類'] if c in df_matches.columns]
-        st.dataframe(df_matches[display_cols], hide_index=True, use_container_width=True)
+        st.subheader("🏆 淘汰賽對賽表")
+        # 32強對賽表（Bracket）
+        bracket_pairs = [
+            ("德國", "巴拉圭"), ("法國", "瑞典"),
+            ("南非", "加拿大"), ("荷蘭", "摩洛哥"),
+            ("葡萄牙", "克羅地亞"), ("西班牙", "奧地利"),
+            ("美國", "波斯尼亞"), ("比利時", "塞內加爾"),
+            ("巴西", "日本"), ("科特迪瓦", "挪威"),
+            ("墨西哥", "厄瓜多爾"), ("英格蘭", "剛果民主共和國"),
+            ("阿根廷", "佛得角"), ("澳洲", "埃及"),
+            ("瑞士", "阿爾及利亞"), ("哥倫比亞", "加納"),
+        ]
 
-    with sched_inner2:
-        st.subheader("🏆 淘汰賽賽程")
+        def get_match_info(team_a, team_b):
+            """根據隊名搵返呢場喺 KO_Matches 嘅資料"""
+            if df_ko_matches.empty:
+                return None
+            for _, row in df_ko_matches.iterrows():
+                m_str = str(row['場次']).strip()
+                if (team_a in m_str and team_b in m_str):
+                    return row
+            return None
+
+        def render_team_box(team, match_row, is_winner_side=None):
+            result = ""
+            if match_row is not None:
+                kickoff = str(match_row.get('開賽時間', '')).strip()
+                handicap_team = str(match_row.get('讓球球隊', '')).strip()
+                result_cat = str(match_row.get('賽果分類', '')).strip()
+                if result_cat in KO_PLAYED_STATUSES:
+                    # 判斷贏邊隊
+                    teams_in_match = str(match_row['場次']).split(' vs ')
+                    home_t = teams_in_match[0].strip() if len(teams_in_match) == 2 else ''
+                    away_t = teams_in_match[1].strip() if len(teams_in_match) == 2 else ''
+                    if result_cat in ['上盤', '上盤贏半']:
+                        winner = handicap_team
+                    else:
+                        winner = away_t if handicap_team == home_t else home_t
+                    if team == winner:
+                        result = " 🏆"
+            return team + result
+
+        bracket_html = """
+        <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:14px;">
+        """
+        for team_a, team_b in bracket_pairs:
+            match_row = get_match_info(team_a, team_b)
+            kickoff_str = ""
+            if match_row is not None:
+                kickoff_str = str(match_row.get('開賽時間', '')).strip()
+                if kickoff_str in ['nan', 'None', '']:
+                    kickoff_str = "時間未定"
+            else:
+                kickoff_str = "賽程未定"
+
+            label_a = render_team_box(team_a, match_row)
+            label_b = render_team_box(team_b, match_row)
+
+            bracket_html += f"""
+            <div style="border:1px solid #444; border-radius:8px; padding:8px 12px; width:220px; background:#1a1a2e; color:white;">
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">{kickoff_str}</div>
+                <div style="padding:2px 0;">🔵 {label_a}</div>
+                <div style="text-align:center; font-size:11px; color:#666;">vs</div>
+                <div style="padding:2px 0;">🔴 {label_b}</div>
+            </div>
+            """
+        bracket_html += "</div>"
+
+        st.markdown(bracket_html, unsafe_allow_html=True)
+        st.caption("💡 32強對賽表，每隊名後面 🏆 代表已晉級。決賽：7月20日(一) 03:00　季軍戰：7月19日(日) 05:00")
+
+        st.divider()
+        st.subheader("📋 淘汰賽詳細賽程")
         if df_ko_matches.empty:
             st.info("淘汰賽賽程未準備好。")
         else:
             ko_display_cols = [c for c in ['場次', '輪次', '讓球球隊', '盤口', '開賽時間', '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球'] if c in df_ko_matches.columns]
             st.dataframe(df_ko_matches[ko_display_cols], hide_index=True, use_container_width=True)
+
+    with sched_inner2:
+        st.subheader("⚽ 比賽賽程與賽果")
+        display_cols = [c for c in ['場次', '讓球球隊', '盤口', '開賽時間', '賽果分數', '賽果分類', '結果分類'] if c in df_matches.columns]
+        st.dataframe(df_matches[display_cols], hide_index=True, use_container_width=True)
 
 with tab_ko_mix:
     st.subheader("🏆 淘汰賽詳情")
@@ -662,7 +734,7 @@ with tab_ko_mix:
                 ko_stats.append({
                     '人名': p,
                     '投注場次': total,
-                    '勝場': wins,
+                    '贏嘅場次': wins,
                     '勝率': f"{(wins/total*100):.1f}%" if total > 0 else "0%",
                     '_sort': (wins/total*100) if total > 0 else 0,
                     '下一場心水': next_bet[0] if len(next_bet) > 0 else "未落注"
@@ -670,7 +742,7 @@ with tab_ko_mix:
             ko_df_stats = pd.DataFrame(ko_stats)
             ko_df_stats['勝率排名'] = ko_df_stats['_sort'].rank(method='min', ascending=False).astype(int)
             ko_df_stats = ko_df_stats.sort_values('勝率排名').reset_index(drop=True)
-            ko_df_stats = ko_df_stats[['勝率排名', '人名', '投注場次', '勝場', '勝率', '下一場心水']]
+            ko_df_stats = ko_df_stats[['勝率排名', '人名', '投注場次', '贏嘅場次', '勝率', '下一場心水']]
             st.dataframe(ko_df_stats, hide_index=True, use_container_width=True)
             st.caption("💡 呢個勝率只計「盤口」項目（必投項目），唔包括半場波膽/全場波膽/半全場/頭15分入球。")
 
@@ -712,7 +784,7 @@ with tab_mix:
             stats.append({
                 '人名': p,
                 '投注場次': total,
-                '勝場': wins,
+                '贏嘅場次': wins,
                 '勝率': f"{(wins/total*100):.1f}%" if total > 0 else "0%",
                 '_sort': (wins/total*100) if total > 0 else 0,
                 '下一場心水': next_bet[0] if len(next_bet) > 0 else "未落注"
@@ -720,7 +792,7 @@ with tab_mix:
         df_stats = pd.DataFrame(stats)
         df_stats['勝率排名'] = df_stats['_sort'].rank(method='min', ascending=False).astype(int)
         df_stats = df_stats.sort_values('勝率排名').reset_index(drop=True)
-        df_stats = df_stats[['勝率排名', '人名', '投注場次', '勝場', '勝率', '下一場心水']]
+        df_stats = df_stats[['勝率排名', '人名', '投注場次', '贏嘅場次', '勝率', '下一場心水']]
         st.dataframe(df_stats, hide_index=True, use_container_width=True)
 
     with inner3:
