@@ -531,10 +531,10 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
                 if not is_filled('半場波膽投注'):
                     field_count += 1
                     st.markdown(f"**{field_count}. 半場波膽（選擇性，中+30/錯-10）**")
-                    half_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2",
-                                           "0:0", "1:1", "2:2", "3:3",
-                                           "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4",
-                                           "主其他", "客其他"]
+                    half_score_options = ["未揀",
+                                           "1:0", "2:0", "2:1", "3:0", "3:1", "3:2", "4:0", "4:1", "4:2", "4:3",
+                                           "0:0", "1:1", "2:2", "3:3", "4:4",
+                                           "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "0:4", "1:4", "2:4", "3:4"]
                     ko_half_score = st.selectbox("半場波膽", half_score_options, key="ko_half_score_sb", label_visibility="collapsed")
                 else:
                     ko_half_score = None
@@ -543,10 +543,11 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
                 if not is_filled('全場波膽投注'):
                     field_count += 1
                     st.markdown(f"**{field_count}. 全場波膽（選擇性，中+50/錯-10）**")
-                    full_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2", "4:3", "5:1", "5:2", "5:3", "5:4",
-                                           "0:0", "1:1", "2:2", "3:3",
-                                           "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4", "3:4", "1:5", "2:5", "3:5", "4:5",
-                                           "主其他", "客其他"]
+                    full_score_options = ["未揀",
+                                           "1:0", "2:0", "2:1", "3:0", "3:1", "3:2", "4:0", "4:1", "4:2", "4:3", "5:0", "5:1", "5:2", "5:3",
+                                           "0:0", "1:1", "2:2", "3:3", "4:4",
+                                           "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "0:4", "1:4", "2:4", "3:4", "0:5", "1:5", "2:5", "3:5", "4:5",
+                                           "主其他", "和其他", "客其他"]
                     ko_full_score = st.selectbox("全場波膽", full_score_options, key="ko_full_score_sb", label_visibility="collapsed")
                 else:
                     ko_full_score = None
