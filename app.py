@@ -40,7 +40,7 @@ def safe_load(sheet_name, cols):
         return pd.DataFrame(columns=cols)
 
 ko_matches_cols = ['場次', '輪次', '讓球球隊', '盤口', '上盤賠率', '下盤賠率', '開賽時間',
-                    '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '啟動晉級計分']
+                    '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '啟動晉級計分', '晉級球隊']
 ko_bets_cols = ['人名', '場次', '盤口投注', '晉級球隊投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注', '時間戳記']
 ko_champion_cols = ['人名', '投注球隊', '是否冠軍', '時間戳記']
 
@@ -145,39 +145,22 @@ def ko_get_handicap_points(row):
     return 0
 
 def ko_get_advance_points(row):
-    """晉級球隊：必揀，直接睇全場賽果分數（例如2:1）判斷邊隊比數高就係晉級隊，唔理讓球
+    """晉級球隊：必揀，讀取 KO_Matches 嘅「晉級球隊」欄（管理員手動填）判斷係咪中
        中+10/唔中-10，未揀-10
-       只有 KO_Matches 嗰場「啟動晉級計分」打「是」先會計分（管理員手動控制邊場起計）"""
+       只有 KO_Matches 嗰場「啟動晉級計分」打「是」先會計分"""
     enabled = str(row.get('啟動晉級計分', '')).strip()
     if enabled != '是':
-        return 0  # 未啟動晉級計分嘅場次，一律唔計分（用嚎處理已經完場、新功能加入前嘅場次）
+        return 0
 
     user_bet = str(row.get('晉級球隊投注', '')).strip()
-    score_str = str(row.get('全場賽果分數', '')).strip()
-    match_name = str(row.get('場次', '')).strip()
+    actual_winner = str(row.get('晉級球隊', '')).strip()  # 管理員填嘅晉級球隊
 
-    if score_str in ['', 'nan', 'None'] or ':' not in score_str:
-        return 0  # 未開波/未填全場賽果，唔計分
-
-    teams = match_name.split(' vs ')
-    if len(teams) != 2:
-        return 0
-    home_team, away_team = teams[0].strip(), teams[1].strip()
-
-    try:
-        home_score, away_score = score_str.split(':')
-        home_score, away_score = int(home_score.strip()), int(away_score.strip())
-    except (ValueError, IndexError):
-        return 0
-
-    if home_score == away_score:
-        return 0  # 淘汰賽理論上唔會和波，如果真係和波（例如未打加時/互射）就唔計分
-
-    advancing_team = home_team if home_score > away_score else away_team
+    if actual_winner in ['', 'nan', 'None']:
+        return 0  # 管理員未填，唔計分
 
     if user_bet in ['', 'nan']:
         return -10  # 必揀，未揀扣10
-    return 10 if user_bet == advancing_team else -10
+    return 10 if user_bet == actual_winner else -10
 
 def ko_get_score_points(row, bet_col, result_col, win_pts):
     user_bet = str(row.get(bet_col, '')).strip()
@@ -248,7 +231,7 @@ if not df_ko_bets.empty and not df_ko_matches.empty:
     df_ko_bets['乾淨場次'] = df_ko_bets['場次'].astype(str).str.replace(' ', '').str.strip()
     df_ko_matches['乾淨場次'] = df_ko_matches['場次'].astype(str).str.replace(' ', '').str.strip()
 
-    ko_merge_cols = [c for c in ['乾淨場次', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '讓球球隊', '盤口', '半場賽果分數', '全場賽果分數', '啟動晉級計分'] if c in df_ko_matches.columns]
+    ko_merge_cols = [c for c in ['乾淨場次', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '讓球球隊', '盤口', '半場賽果分數', '全場賽果分數', '啟動晉級計分', '晉級球隊'] if c in df_ko_matches.columns]
     ko_merged = df_ko_bets.merge(df_ko_matches[ko_merge_cols], on='乾淨場次', how='left', suffixes=('', '_match'))
 
     ko_merged['盤口得分'] = ko_merged.apply(ko_get_handicap_points, axis=1)
@@ -556,7 +539,7 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
                 if not is_filled('半全場投注'):
                     field_count += 1
                     st.markdown(f"**{field_count}. 半全場（選擇性，中+20/錯-10）**")
-                    htft_options = ["未揀", "主主", "主客", "和和", "客客", "客主", "和主", "和客"]
+                    htft_options = ["未揀", "主主", "主和", "主客", "和主", "和和", "和客", "客主", "客和", "客客"]
                     ko_htft = st.selectbox("半全場", htft_options, key="ko_htft_sb", label_visibility="collapsed")
                 else:
                     ko_htft = None
