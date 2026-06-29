@@ -486,63 +486,126 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
             away_team = teams[1].strip() if len(teams) == 2 else ''
             other_team = away_team if handicap_team == home_team else home_team
 
+            # 搵返呢個人呢場波已經填咗嘅項目（用嚎決定表單顯示乜）
+            existing_bet = None
+            if ku is not None:
+                df_ko_current_check = safe_load("KO_Bets", ko_bets_cols)
+                if not df_ko_current_check.empty:
+                    match_rows = df_ko_current_check[
+                        (df_ko_current_check['人名'] == ku) & (df_ko_current_check['場次'] == km)
+                    ]
+                    if not match_rows.empty:
+                        existing_bet = match_rows.iloc[0]
+
+            def is_filled(col_name):
+                """檢查呢個項目係咪已經填咗（有值）"""
+                if existing_bet is None:
+                    return False
+                val = str(existing_bet.get(col_name, '')).strip()
+                return val not in ['', 'nan', 'None']
+
+            if existing_bet is not None:
+                st.info("💡 你已經落咗部分注，已填項目唔會再顯示，可以補揀未填嘅項目。")
+
             with st.form("ko_bet_form", clear_on_submit=True):
-                st.markdown(f"**1. 盤口（必投，唔投扣10分）**")
-                ko_handicap = st.radio("盤口", [f"上盤 {handicap_team}", f"下盤 {other_team}"], key="ko_handicap_radio", label_visibility="collapsed")
-                ko_handicap_val = "上盤" if ko_handicap.startswith("上盤") else "下盤"
+                field_count = 0
 
-                st.markdown("**2. 晉級球隊（必揀，唔揀扣10分，中+10/錯-10）**")
-                ko_advance = st.radio("晉級球隊", [home_team, away_team], key="ko_advance_radio", label_visibility="collapsed")
+                # 1. 盤口
+                if not is_filled('盤口投注'):
+                    field_count += 1
+                    st.markdown(f"**{field_count}. 盤口（必投，唔投扣10分）**")
+                    ko_handicap = st.radio("盤口", [f"上盤 {handicap_team}", f"下盤 {other_team}"], key="ko_handicap_radio", label_visibility="collapsed")
+                    ko_handicap_val = "上盤" if ko_handicap.startswith("上盤") else "下盤"
+                else:
+                    ko_handicap_val = None
 
-                st.markdown("**3. 半場波膽（選擇性，中+30/錯-10）**")
-                half_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2",
-                                       "0:0", "1:1", "2:2", "3:3",
-                                       "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4",
-                                       "主其他", "客其他"]
-                ko_half_score = st.selectbox("半場波膽", half_score_options, key="ko_half_score_sb", label_visibility="collapsed")
+                # 2. 晉級球隊
+                if not is_filled('晉級球隊投注'):
+                    field_count += 1
+                    st.markdown(f"**{field_count}. 晉級球隊（必揀，唔揀扣10分，中+10/錯-10）**")
+                    ko_advance = st.radio("晉級球隊", [home_team, away_team], key="ko_advance_radio", label_visibility="collapsed")
+                else:
+                    ko_advance = None
 
-                st.markdown("**4. 全場波膽（選擇性，中+50/錯-10）**")
-                full_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2", "4:3", "5:1", "5:2", "5:3", "5:4",
-                                       "0:0", "1:1", "2:2", "3:3",
-                                       "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4", "3:4", "1:5", "2:5", "3:5", "4:5",
-                                       "主其他", "客其他"]
-                ko_full_score = st.selectbox("全場波膽", full_score_options, key="ko_full_score_sb", label_visibility="collapsed")
+                # 3. 半場波膽
+                if not is_filled('半場波膽投注'):
+                    field_count += 1
+                    st.markdown(f"**{field_count}. 半場波膽（選擇性，中+30/錯-10）**")
+                    half_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2",
+                                           "0:0", "1:1", "2:2", "3:3",
+                                           "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4",
+                                           "主其他", "客其他"]
+                    ko_half_score = st.selectbox("半場波膽", half_score_options, key="ko_half_score_sb", label_visibility="collapsed")
+                else:
+                    ko_half_score = None
 
-                st.markdown("**5. 半全場（選擇性，中+20/錯-10）**")
-                htft_options = ["未揀", "主主", "主客", "和和", "客客", "客主", "和主", "和客"]
-                ko_htft = st.selectbox("半全場", htft_options, key="ko_htft_sb", label_visibility="collapsed")
+                # 4. 全場波膽
+                if not is_filled('全場波膽投注'):
+                    field_count += 1
+                    st.markdown(f"**{field_count}. 全場波膽（選擇性，中+50/錯-10）**")
+                    full_score_options = ["未揀", "1:0", "2:0", "2:1", "3:1", "3:2", "4:1", "4:2", "4:3", "5:1", "5:2", "5:3", "5:4",
+                                           "0:0", "1:1", "2:2", "3:3",
+                                           "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "1:4", "2:4", "3:4", "1:5", "2:5", "3:5", "4:5",
+                                           "主其他", "客其他"]
+                    ko_full_score = st.selectbox("全場波膽", full_score_options, key="ko_full_score_sb", label_visibility="collapsed")
+                else:
+                    ko_full_score = None
 
-                st.markdown("**6. 上半場頭15分鐘入球（選擇性，揀「是」中+30/錯-10，唔揀就唔計分）**")
-                ko_first15_1h = st.selectbox("上半頭15分", ["未揀", "是"], key="ko_first15_1h_sb", label_visibility="collapsed")
+                # 5. 半全場
+                if not is_filled('半全場投注'):
+                    field_count += 1
+                    st.markdown(f"**{field_count}. 半全場（選擇性，中+20/錯-10）**")
+                    htft_options = ["未揀", "主主", "主客", "和和", "客客", "客主", "和主", "和客"]
+                    ko_htft = st.selectbox("半全場", htft_options, key="ko_htft_sb", label_visibility="collapsed")
+                else:
+                    ko_htft = None
 
-                st.markdown("**7. 下半場頭15分鐘入球（選擇性，揀「是」中+30/錯-10，唔揀就唔計分）**")
-                ko_first15_2h = st.selectbox("下半頭15分", ["未揀", "是"], key="ko_first15_2h_sb", label_visibility="collapsed")
+                # 6. 上半頭15分
+                if not is_filled('上半頭15分投注'):
+                    field_count += 1
+                    st.markdown(f"**{field_count}. 上半場頭15分鐘入球（選擇性，揀「是」中+30/錯-10，唔揀就唔計分）**")
+                    ko_first15_1h = st.selectbox("上半頭15分", ["未揀", "是"], key="ko_first15_1h_sb", label_visibility="collapsed")
+                else:
+                    ko_first15_1h = None
+
+                # 7. 下半頭15分
+                if not is_filled('下半頭15分投注'):
+                    field_count += 1
+                    st.markdown(f"**{field_count}. 下半場頭15分鐘入球（選擇性，揀「是」中+30/錯-10，唔揀就唔計分）**")
+                    ko_first15_2h = st.selectbox("下半頭15分", ["未揀", "是"], key="ko_first15_2h_sb", label_visibility="collapsed")
+                else:
+                    ko_first15_2h = None
+
+                if field_count == 0:
+                    st.success("✅ 你已經填咗全部項目喇！")
 
                 if st.form_submit_button("🔥 提交淘汰賽投注"):
                     if ku is None:
                         st.session_state['ko_bet_msg'] = ('error', "⚠️ 必須先選擇名字！")
+                    elif field_count == 0:
+                        st.session_state['ko_bet_msg'] = ('error', "❌ 你已經填咗全部項目，冇得再改！")
                     else:
-                        df_ko_current = safe_load("KO_Bets", ko_bets_cols)
-                        if not df_ko_current.empty and not df_ko_current[(df_ko_current['人名'] == ku) & (df_ko_current['場次'] == km)].empty:
-                            st.session_state['ko_bet_msg'] = ('error', "❌ 呢場你投過喇，唔准改！")
+                        params = {'sheet': 'KO_Bets', 'name': ku, 'match': km}
+                        if ko_handicap_val is not None:
+                            params['盤口投注'] = ko_handicap_val
+                        if ko_advance is not None:
+                            params['晉級球隊投注'] = ko_advance
+                        if ko_half_score is not None:
+                            params['半場波膽投注'] = '' if ko_half_score == '未揀' else ko_half_score
+                        if ko_full_score is not None:
+                            params['全場波膽投注'] = '' if ko_full_score == '未揀' else ko_full_score
+                        if ko_htft is not None:
+                            params['半全場投注'] = '' if ko_htft == '未揀' else ko_htft
+                        if ko_first15_1h is not None:
+                            params['上半頭15分投注'] = '' if ko_first15_1h == '未揀' else ko_first15_1h
+                        if ko_first15_2h is not None:
+                            params['下半頭15分投注'] = '' if ko_first15_2h == '未揀' else ko_first15_2h
+
+                        resp = requests.get(GAS_URL, params=params)
+                        if resp.status_code == 200:
+                            st.session_state['ko_bet_msg'] = ('success', f"✅ 已成功下注！{ku} - {km}")
                         else:
-                            params = {
-                                'sheet': 'KO_Bets',
-                                'name': ku,
-                                'match': km,
-                                '盤口投注': ko_handicap_val,
-                                '晉級球隊投注': ko_advance,
-                                '半場波膽投注': '' if ko_half_score == '未揀' else ko_half_score,
-                                '全場波膽投注': '' if ko_full_score == '未揀' else ko_full_score,
-                                '半全場投注': '' if ko_htft == '未揀' else ko_htft,
-                                '上半頭15分投注': '' if ko_first15_1h == '未揀' else ko_first15_1h,
-                                '下半頭15分投注': '' if ko_first15_2h == '未揀' else ko_first15_2h,
-                            }
-                            resp = requests.get(GAS_URL, params=params)
-                            if resp.status_code == 200:
-                                st.session_state['ko_bet_msg'] = ('success', f"✅ 已成功下注！{ku} - {km}")
-                            else:
-                                st.session_state['ko_bet_msg'] = ('error', "系統繁忙，請重試")
+                            st.session_state['ko_bet_msg'] = ('error', "系統繁忙，請重試")
                         st.rerun()
 
 # =========================================================
