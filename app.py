@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import requests
 import urllib.parse
@@ -872,12 +873,20 @@ with tab2:
         svg_parts.append(connector(x4_r, y_final_mid, x_final + BOX_W, y_final_mid))
 
         svg_content = "".join(svg_parts)
-        full_svg = f'<svg viewBox="0 0 {total_w} {svg_h}" width="100%" style="min-width:1200px;">{svg_content}</svg>'
+        full_html = f'''<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body {{ margin:0; padding:16px; background:#0d1117; font-family: -apple-system, sans-serif; overflow-x:auto; }}
+  svg {{ display:block; }}
+</style>
+</head>
+<body>
+<svg viewBox="0 0 {total_w} {svg_h}" width="{total_w}" height="{svg_h}">{svg_content}</svg>
+</body>
+</html>'''
 
-        st.markdown(
-            f'<div style="overflow-x:auto; background:#0d1117; padding:16px; border-radius:8px;">{full_svg}</div>',
-            unsafe_allow_html=True
-        )
+        components.html(full_html, height=svg_h + 60, scrolling=True)
         st.caption("💡 32強對賽表，🏆代表已晉級。輪次配對需要 KO_Matches 填入對應隊名先會自動連接（例：16強要填「德國 vs 法國」呢類由32強勝方組成嘅場次）。決賽：7月20日(一) 03:00　季軍戰：7月19日(日) 05:00")
 
         st.divider()
