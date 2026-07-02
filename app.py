@@ -37,7 +37,8 @@ def safe_load(sheet_name, cols):
         return pd.DataFrame(columns=cols)
 ko_matches_cols = ['場次', '輪次', '讓球球隊', '盤口', '上盤賠率', '下盤賠率', '開賽時間',
                     '全場賽果分數', '半場賽果分數', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '啟動晉級計分', '晉級球隊',
-                    '半場角球結果', '全場角球結果', '罰牌大細結果', '大細波結果', '半大結果', '大細波盤口', '半大盤口']
+                    '半場角球結果', '全場角球結果', '罰牌大細結果', '大細波結果', '半大結果',
+                    '半場角球盤口', '全場角球盤口', '罰牌盤口', '大細波盤口', '半大盤口']
 ko_bets_cols = ['人名', '場次', '盤口投注', '晉級球隊投注', '半場波膽投注', '全場波膽投注', '半全場投注', '上半頭15分投注', '下半頭15分投注',
                  '半場角球投注', '全場角球投注', '罰牌大細投注', '大細波投注', '半大投注', '時間戳記']
 ko_champion_cols = ['人名', '投注球隊', '是否冠軍', '時間戳記']
@@ -213,7 +214,7 @@ if not df_ko_bets.empty and not df_ko_matches.empty:
     ko_merge_cols = [c for c in ['乾淨場次', '賽果分類', '半全場結果', '上半頭15分入球', '下半頭15分入球', '讓球球隊', '盤口',
                                   '半場賽果分數', '全場賽果分數', '啟動晉級計分', '晉級球隊',
                                   '半場角球結果', '全場角球結果', '罰牌大細結果', '大細波結果', '半大結果',
-                                  '大細波盤口', '半大盤口'] if c in df_ko_matches.columns]
+                                  '半場角球盤口', '全場角球盤口', '罰牌盤口', '大細波盤口', '半大盤口'] if c in df_ko_matches.columns]
     ko_merged = df_ko_bets.merge(df_ko_matches[ko_merge_cols], on='乾淨場次', how='left', suffixes=('', '_match'))
     ko_merged['盤口得分'] = ko_merged.apply(ko_get_handicap_points, axis=1)
     ko_merged['晉級球隊得分'] = ko_merged.apply(ko_get_advance_points, axis=1)
@@ -537,21 +538,27 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
                 # 8. 半場角球
                 if not is_filled('半場角球投注'):
                     field_count += 1
-                    st.markdown(f"**{field_count}. 半場角球 大細（選擇性，中+20/錯-10，可以走盤）**")
+                    hc_corner_line = str(km_row.iloc[0].get('半場角球盤口', '')).strip() if not km_row.empty else ''
+                    hc_corner_label = f"（盤口：{hc_corner_line}）" if hc_corner_line not in ['', 'nan', 'None'] else ""
+                    st.markdown(f"**{field_count}. 半場角球 大細{hc_corner_label}（選擇性，中+20/錯-10，可以走盤）**")
                     ko_hc_corner = st.selectbox("半場角球", ["未揀", "大", "細"], key="ko_hc_corner_sb", label_visibility="collapsed")
                 else:
                     ko_hc_corner = None
                 # 9. 全場角球
                 if not is_filled('全場角球投注'):
                     field_count += 1
-                    st.markdown(f"**{field_count}. 全場角球 大細（選擇性，中+20/錯-10，可以走盤）**")
+                    fc_corner_line = str(km_row.iloc[0].get('全場角球盤口', '')).strip() if not km_row.empty else ''
+                    fc_corner_label = f"（盤口：{fc_corner_line}）" if fc_corner_line not in ['', 'nan', 'None'] else ""
+                    st.markdown(f"**{field_count}. 全場角球 大細{fc_corner_label}（選擇性，中+20/錯-10，可以走盤）**")
                     ko_fc_corner = st.selectbox("全場角球", ["未揀", "大", "細"], key="ko_fc_corner_sb", label_visibility="collapsed")
                 else:
                     ko_fc_corner = None
                 # 10. 罰牌大細
                 if not is_filled('罰牌大細投注'):
                     field_count += 1
-                    st.markdown(f"**{field_count}. 罰牌大細（選擇性，中+20/錯-10，可以走盤）**")
+                    card_line = str(km_row.iloc[0].get('罰牌盤口', '')).strip() if not km_row.empty else ''
+                    card_label = f"（盤口：{card_line}）" if card_line not in ['', 'nan', 'None'] else ""
+                    st.markdown(f"**{field_count}. 罰牌大細{card_label}（選擇性，中+20/錯-10，可以走盤）**")
                     ko_card_ou = st.selectbox("罰牌大細", ["未揀", "大", "細"], key="ko_card_ou_sb", label_visibility="collapsed")
                 else:
                     ko_card_ou = None
