@@ -167,7 +167,9 @@ def ko_get_first15_points(row, bet_col, result_col):
     return 30 if user_bet == result else -10
 def ko_get_ou_points(row, bet_col, result_col):
     """大細類新項目（半場角球/全場角球/罰牌大細/大細波/半大）：
-       選擇性、落唔落都唔扣分、中+20、錯-10、走盤=0（可以有走盤）"""
+       選擇性、落唔落都唔扣分、中+20、錯-10、走盤=0（可以有走盤）
+       如果係季度盤（quarter line），仲可以出「大贏半」／「細贏半」：
+       贏嗰邊 +10（一半），輸嗰邊 -5（一半），同小組賽「上盤贏半/下盤贏半」邏輯一様"""
     user_bet = str(row.get(bet_col, '')).strip()
     result = str(row.get(result_col, '')).strip()
     if user_bet in ['', 'nan']:
@@ -176,6 +178,10 @@ def ko_get_ou_points(row, bet_col, result_col):
         return 0
     if result == '走盤':
         return 0
+    if result == '大贏半':
+        return 10 if user_bet == '大' else -5
+    if result == '細贏半':
+        return 10 if user_bet == '細' else -5
     return 20 if user_bet == result else -10
 # 數據合併（小組賽）
 df_bets['乾淨場次'] = df_bets['場次'].astype(str).str.replace(' ', '').str.strip()
@@ -669,7 +675,7 @@ with tab_ko:
         st.dataframe(df_ko_scores[['排名', '人名', '淘汰賽得分']], hide_index=True, use_container_width=True)
         if ACTUAL_CHAMPION_TEAM:
             st.caption(f"👑 冠軍隊：{ACTUAL_CHAMPION_TEAM}（已計入奪冠球隊得分）")
-        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，完全唔落注扣-20=盤口10+晉級10）、晉級球隊中+10/錯-10（必揀，唔揀扣10，只有KO_Matches打咗「啟動晉級計分=是」嘅場次先會計分）、半場波膽中+30、全場波膽中+50、半全場中+20、上/下半頭15分入球中各+30，半場角球/全場角球/罰牌大細/大細波/半大呢5個新項目：選擇性、中+20、錯-10、可以走盤（走盤=0），以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
+        st.caption("💡 淘汰賽計分：盤口±10（贏半±5，必投，完全唔落注扣-20=盤口10+晉級10）、晉級球隊中+10/錯-10（必揀，唔揀扣10，只有KO_Matches打咗「啟動晉級計分=是」嘅場次先會計分）、半場波膽中+30、全場波膽中+50、半全場中+20、上/下半頭15分入球中各+30，半場角球/全場角球/罰牌大細/大細波/半大呢5個新項目：選擇性、中+20、錯-10、走盤=0（可以走盤），如果係季度盤仲可以出「贏半」＝贏嗰邊+10/輸嗰邊-5，以上選擇性項目錯咗一律-10。奪冠球隊中+100（一次性，鎖死）。")
         if not df_ko_champion.empty:
             st.divider()
             st.subheader("👑 奪冠球隊投注紀錄")
