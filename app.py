@@ -539,45 +539,55 @@ with st.sidebar.expander("🏆 淘汰賽落注", expanded=False):
                 if not is_filled('半場角球投注'):
                     field_count += 1
                     hc_corner_line = str(km_row.iloc[0].get('半場角球盤口', '')).strip() if not km_row.empty else ''
-                    hc_corner_label = f"（盤口：{hc_corner_line}）" if hc_corner_line not in ['', 'nan', 'None'] else ""
-                    st.markdown(f"**{field_count}. 半場角球 大細{hc_corner_label}（選擇性，中+20/錯-10，可以走盤）**")
-                    ko_hc_corner = st.selectbox("半場角球", ["未揀", "大", "細"], key="ko_hc_corner_sb", label_visibility="collapsed")
+                    has_hc_line = hc_corner_line not in ['', 'nan', 'None']
+                    st.markdown(f"**{field_count}. 半場角球 大細（選擇性，中+20/錯-10，可以走盤）**")
+                    hc_corner_opts = ["未揀", f"大（大於 {hc_corner_line}）", f"細（細於 {hc_corner_line}）"] if has_hc_line else ["未揀", "大", "細"]
+                    ko_hc_corner_raw = st.radio("半場角球", hc_corner_opts, key="ko_hc_corner_radio", label_visibility="collapsed")
+                    ko_hc_corner = "未揀" if ko_hc_corner_raw == "未揀" else ("大" if ko_hc_corner_raw.startswith("大") else "細")
                 else:
                     ko_hc_corner = None
                 # 9. 全場角球
                 if not is_filled('全場角球投注'):
                     field_count += 1
                     fc_corner_line = str(km_row.iloc[0].get('全場角球盤口', '')).strip() if not km_row.empty else ''
-                    fc_corner_label = f"（盤口：{fc_corner_line}）" if fc_corner_line not in ['', 'nan', 'None'] else ""
-                    st.markdown(f"**{field_count}. 全場角球 大細{fc_corner_label}（選擇性，中+20/錯-10，可以走盤）**")
-                    ko_fc_corner = st.selectbox("全場角球", ["未揀", "大", "細"], key="ko_fc_corner_sb", label_visibility="collapsed")
+                    has_fc_line = fc_corner_line not in ['', 'nan', 'None']
+                    st.markdown(f"**{field_count}. 全場角球 大細（選擇性，中+20/錯-10，可以走盤）**")
+                    fc_corner_opts = ["未揀", f"大（大於 {fc_corner_line}）", f"細（細於 {fc_corner_line}）"] if has_fc_line else ["未揀", "大", "細"]
+                    ko_fc_corner_raw = st.radio("全場角球", fc_corner_opts, key="ko_fc_corner_radio", label_visibility="collapsed")
+                    ko_fc_corner = "未揀" if ko_fc_corner_raw == "未揀" else ("大" if ko_fc_corner_raw.startswith("大") else "細")
                 else:
                     ko_fc_corner = None
                 # 10. 罰牌大細
                 if not is_filled('罰牌大細投注'):
                     field_count += 1
                     card_line = str(km_row.iloc[0].get('罰牌盤口', '')).strip() if not km_row.empty else ''
-                    card_label = f"（盤口：{card_line}）" if card_line not in ['', 'nan', 'None'] else ""
-                    st.markdown(f"**{field_count}. 罰牌大細{card_label}（選擇性，中+20/錯-10，可以走盤）**")
-                    ko_card_ou = st.selectbox("罰牌大細", ["未揀", "大", "細"], key="ko_card_ou_sb", label_visibility="collapsed")
+                    has_card_line = card_line not in ['', 'nan', 'None']
+                    st.markdown(f"**{field_count}. 罰牌大細（選擇性，中+20/錯-10，可以走盤）**")
+                    card_opts = ["未揀", f"大（大於 {card_line}）", f"細（細於 {card_line}）"] if has_card_line else ["未揀", "大", "細"]
+                    ko_card_ou_raw = st.radio("罰牌大細", card_opts, key="ko_card_ou_radio", label_visibility="collapsed")
+                    ko_card_ou = "未揀" if ko_card_ou_raw == "未揀" else ("大" if ko_card_ou_raw.startswith("大") else "細")
                 else:
                     ko_card_ou = None
                 # 11. 大細波
                 if not is_filled('大細波投注'):
                     field_count += 1
                     ou_line_val = str(km_row.iloc[0].get('大細波盤口', '')).strip() if not km_row.empty else ''
-                    ou_line_label = f"（盤口：{ou_line_val}）" if ou_line_val not in ['', 'nan', 'None'] else ""
-                    st.markdown(f"**{field_count}. 大細波{ou_line_label}（選擇性，中+20/錯-10，可以走盤）**")
-                    ko_goal_ou = st.selectbox("大細波", ["未揀", "大", "細"], key="ko_goal_ou_sb", label_visibility="collapsed")
+                    has_ou_line = ou_line_val not in ['', 'nan', 'None']
+                    st.markdown(f"**{field_count}. 大細波（選擇性，中+20/錯-10，可以走盤）**")
+                    goal_ou_opts = ["未揀", f"大（大於 {ou_line_val}）", f"細（細於 {ou_line_val}）"] if has_ou_line else ["未揀", "大", "細"]
+                    ko_goal_ou_raw = st.radio("大細波", goal_ou_opts, key="ko_goal_ou_radio", label_visibility="collapsed")
+                    ko_goal_ou = "未揀" if ko_goal_ou_raw == "未揀" else ("大" if ko_goal_ou_raw.startswith("大") else "細")
                 else:
                     ko_goal_ou = None
                 # 12. 半大
                 if not is_filled('半大投注'):
                     field_count += 1
                     half_ou_line_val = str(km_row.iloc[0].get('半大盤口', '')).strip() if not km_row.empty else ''
-                    half_ou_line_label = f"（盤口：{half_ou_line_val}）" if half_ou_line_val not in ['', 'nan', 'None'] else ""
-                    st.markdown(f"**{field_count}. 半大{half_ou_line_label}（選擇性，中+20/錯-10，可以走盤）**")
-                    ko_half_ou = st.selectbox("半大", ["未揀", "大", "細"], key="ko_half_ou_sb", label_visibility="collapsed")
+                    has_half_ou_line = half_ou_line_val not in ['', 'nan', 'None']
+                    st.markdown(f"**{field_count}. 半大（選擇性，中+20/錯-10，可以走盤）**")
+                    half_ou_opts = ["未揀", f"大（大於 {half_ou_line_val}）", f"細（細於 {half_ou_line_val}）"] if has_half_ou_line else ["未揀", "大", "細"]
+                    ko_half_ou_raw = st.radio("半大", half_ou_opts, key="ko_half_ou_radio", label_visibility="collapsed")
+                    ko_half_ou = "未揀" if ko_half_ou_raw == "未揀" else ("大" if ko_half_ou_raw.startswith("大") else "細")
                 else:
                     ko_half_ou = None
                 if field_count == 0:
